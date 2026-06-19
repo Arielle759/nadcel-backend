@@ -4,6 +4,39 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property int $salon_id
+ * @property string $name
+ * @property string|null $description
+ * @property numeric $price
+ * @property int $duration
+ * @property string $category
+ * @property string|null $image
+ * @property bool $is_active
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Appointment> $appointments
+ * @property-read int|null $appointments_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Employee> $employees
+ * @property-read int|null $employees_count
+ * @property-read \App\Models\Salon|null $salon
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service query()
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereCategory($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereDescription($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereDuration($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereImage($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereIsActive($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service wherePrice($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereSalonId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|Service whereUpdatedAt($value)
+ * @mixin \Eloquent
+ */
 class Service extends Model
 {
     protected $fillable = [
