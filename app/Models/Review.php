@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
@@ -35,6 +37,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Review extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'client_id',
         'appointment_id',
@@ -50,17 +53,17 @@ class Review extends Model
     ];
 
     // Relations
-    public function client()
+    public function client(): BelongsTo
     {
         return $this->belongsTo(User::class, 'client_id');
     }
 
-    public function appointment()
+    public function appointment(): BelongsTo
     {
         return $this->belongsTo(Appointment::class);
     }
 
-    public function salon()
+    public function salon(): BelongsTo
     {
         return $this->belongsTo(Salon::class);
     }

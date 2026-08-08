@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -47,7 +50,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Appointment extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
+
+    const ALLOWED_TRANSITIONS = [
+        'pending'   => ['confirmed', 'cancelled'],
+        'confirmed' => ['completed', 'cancelled'],
+        'completed' => [],
+        'cancelled' => [],
+    ];
 
     protected $fillable = [
         'client_id',
@@ -59,7 +69,14 @@ class Appointment extends Model
         'status',
         'price',
         'notes',
+        'payment_status',
+        'reminder_sent_at',
     ];
+
+    public function canTransitionTo(string $newStatus): bool
+    {
+        return in_array($newStatus, self::ALLOWED_TRANSITIONS[$this->status] ?? [], true);
+    }
 
     protected $casts = [
         'scheduled_at' => 'datetime',
@@ -67,27 +84,27 @@ class Appointment extends Model
     ];
 
     // Relations
-    public function client()
+    public function client(): BelongsTo
     {
         return $this->belongsTo(User::class, 'client_id');
     }
 
-    public function salon()
+    public function salon(): BelongsTo
     {
         return $this->belongsTo(Salon::class);
     }
 
-    public function service()
+    public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
     }
 
-    public function employee()
+    public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }
 
-    public function review()
+    public function review(): HasOne
     {
         return $this->hasOne(Review::class);
     }

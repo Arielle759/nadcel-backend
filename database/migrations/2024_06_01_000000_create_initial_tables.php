@@ -66,7 +66,7 @@ return new class extends Migration
             $table->foreignId('employee_id')->nullable()->constrained('employees')->onDelete('set null');
             $table->dateTime('scheduled_at');
             $table->integer('duration');
-            $table->enum('status', ['pending', 'confirmed', 'completed', 'cancelled'])->default('pending');
+            $table->string('status')->default('pending');
             $table->decimal('price', 10, 2);
             $table->text('notes')->nullable();
             $table->softDeletes();

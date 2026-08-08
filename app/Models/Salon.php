@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -59,7 +62,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Salon extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'manager_id',
@@ -73,8 +76,6 @@ class Salon extends Model
         'logo',
         'cover',
         'rating',
-        'is_active',
-        'is_verified',
     ];
 
     protected $casts = [
@@ -83,28 +84,54 @@ class Salon extends Model
         'is_verified' => 'boolean',
     ];
 
+    public function verify(): void
+    {
+        $this->is_verified = true;
+        $this->is_active = true;
+        $this->save();
+    }
+
+    public function reject(): void
+    {
+        $this->is_verified = false;
+        $this->is_active = false;
+        $this->save();
+    }
+
+    public function suspend(): void
+    {
+        $this->is_active = false;
+        $this->save();
+    }
+
+    public function reactivate(): void
+    {
+        $this->is_active = true;
+        $this->save();
+    }
+
     // Relations
-    public function manager()
+    public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
     }
 
-    public function services()
+    public function services(): HasMany
     {
         return $this->hasMany(Service::class);
     }
 
-    public function employees()
+    public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
     }
 
-    public function appointments()
+    public function appointments(): HasMany
     {
         return $this->hasMany(Appointment::class);
     }
 
-    public function reviews()
+    public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
     }

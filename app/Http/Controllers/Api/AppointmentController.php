@@ -2,20 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Mail\AppointmentCancelled;
+use App\Mail\AppointmentConfirmed;
+use App\Mail\AppointmentCreated;
 use App\Models\Appointment;
+use App\Models\Service;
+use App\Services\AppointmentAvailabilityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\Controller;
 
 class AppointmentController extends Controller
 {
-    public function index()
-    {
-        $appointments = Appointment::where('client_id', auth()->user()?->id)
-            ->with('salon', 'service', 'employee')
-            ->orderBy('scheduled_at', 'desc')
-            ->paginate(10);
+    public function __construct(
+        private readonly AppointmentAvailabilityService $availability
+    ) {}
 
-        return response()->json($appointments);
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        $query = Appointment::with('salon', 'service', 'employee.user', 'client', 'review');
+
+        if ($user->hasRole('admin')) {
+            // pas de filtre, voit tout
+        } elseif ($user->hasRole('gerant')) {
+            $query->whereHas('salon', fn ($q) => $q->where('manager_id', $user->id));
+        } else {
+            $query->where('client_id', $user->id);
+        }
+
+        return response()->json($query->orderBy('scheduled_at', 'desc')->paginate(10));
     }
 
     public function store(Request $request)
@@ -27,42 +44,89 @@ class AppointmentController extends Controller
             'scheduled_at' => 'required|date|after:now',
         ]);
 
+        $service = Service::findOrFail($validated['service_id']);
+        $salon = \App\Models\Salon::findOrFail($validated['salon_id']);
+        $scheduledAt = \Illuminate\Support\Carbon::parse($validated['scheduled_at']);
+
+        $employee = $this->availability->findAvailableEmployee($salon, $service, $scheduledAt, $service->duration);
+
+        if (!$employee) {
+            return response()->json(['error' => 'Aucun employé disponible pour ce créneau.'], 409);
+        }
+
         $appointment = Appointment::create([
-            ...$validated,
-            'client_id' => auth()->user()?->id,
+            'client_id' => Auth::id(),
+            'salon_id' => $salon->id,
+            'service_id' => $service->id,
+            'employee_id' => $employee->id,
+            'scheduled_at' => $scheduledAt,
+            'duration' => $service->duration,
+            'price' => $service->price,
             'status' => 'pending',
         ]);
 
-        return response()->json($appointment, 201);
+        $appointment->load('client', 'salon', 'service');
+        Mail::to($appointment->client->email)->send(new AppointmentCreated($appointment));
+
+        return response()->json($appointment->load('employee'), 201);
     }
 
-    public function show(Appointment $appointment)
+    public function show(Request $request, Appointment $appointment)
     {
+        $this->authorize('view', $appointment);
         $appointment->load('salon', 'service', 'employee', 'review');
         return response()->json($appointment);
     }
 
     public function update(Request $request, Appointment $appointment)
     {
-        if (auth()->user()?->id !== $appointment->client_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
-
         $validated = $request->validate([
-            'status' => 'string|in:pending,confirmed,completed,cancelled',
+            'status' => 'required|string|in:pending,confirmed,in_progress,completed,cancelled',
         ]);
 
-        $appointment->update($validated);
-        return response()->json($appointment);
-    }
+        $user = $request->user();
+        $nouveauStatut = $validated['status'];
 
-    public function destroy(Appointment $appointment)
-    {
-        if (auth()->user()?->id !== $appointment->client_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        if ($user->hasRole('client')) {
+            if ($appointment->client_id !== $user->id || $nouveauStatut !== 'cancelled') {
+                return response()->json(['error' => 'Action non autorisée'], 403);
+            }
+        } else {
+            $this->authorize('manage', $appointment);
+            if (!$appointment->canTransitionTo($nouveauStatut)) {
+                return response()->json(['error' => 'Transition invalide'], 422);
+            }
         }
 
-        $appointment->delete();
-        return response()->noContent();
+        $appointment->update(['status' => $nouveauStatut]);
+        $appointment->load('client', 'salon.manager', 'service');
+
+        if ($nouveauStatut === 'confirmed') {
+            Mail::to($appointment->client->email)->send(new AppointmentConfirmed($appointment));
+        } elseif ($nouveauStatut === 'cancelled') {
+            $initiatedByClient = $user->id === $appointment->client_id;
+            if ($initiatedByClient) {
+                Mail::to($appointment->salon->manager->email)->send(new AppointmentCancelled($appointment, true));
+            } else {
+                Mail::to($appointment->client->email)->send(new AppointmentCancelled($appointment, false));
+            }
+        }
+
+        return response()->json($appointment->load('employee'));
+    }
+
+    public function pay(Request $request, Appointment $appointment)
+    {
+        $this->authorize('pay', $appointment);
+
+        if ($appointment->status === 'cancelled') {
+            return response()->json(['error' => 'Cannot pay a cancelled appointment.'], 422);
+        }
+        if ($appointment->payment_status === 'paid') {
+            return response()->json($appointment->load('salon', 'service', 'employee', 'client'));
+        }
+
+        $appointment->update(['payment_status' => 'paid']);
+        return response()->json($appointment->load('salon', 'service', 'employee', 'client'));
     }
 }
