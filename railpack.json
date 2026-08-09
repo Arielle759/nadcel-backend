@@ -1,4 +1,0 @@
-{
-  "$schema": "https://schema.railpack.com",
-  "buildAptPackages": ["php8.3-pgsql"]
-}
