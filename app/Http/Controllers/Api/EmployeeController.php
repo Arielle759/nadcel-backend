@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use App\Http\Controllers\Controller;
 
 class EmployeeController extends Controller
@@ -37,6 +38,7 @@ class EmployeeController extends Controller
 
         $salon = Salon::findOrFail($validated['salon_id']);
         $this->authorize('manageEmployees', $salon);
+        $this->ensureServicesBelongToSalon($validated['service_ids'] ?? [], $salon);
 
         $employee = DB::transaction(function () use ($validated, $salon) {
             $user = User::create([
@@ -80,6 +82,8 @@ class EmployeeController extends Controller
             'service_ids.*' => 'exists:services,id',
         ]);
 
+        $this->ensureServicesBelongToSalon($validated['service_ids'] ?? [], $employee->salon);
+
         $employee->update(array_filter(
             $validated,
             fn ($key) => in_array($key, ['name', 'phone']),
@@ -99,5 +103,25 @@ class EmployeeController extends Controller
 
         $employee->delete();
         return response()->noContent();
+    }
+
+    /**
+     * @param array<int, int|string> $serviceIds
+     */
+    private function ensureServicesBelongToSalon(array $serviceIds, Salon $salon): void
+    {
+        if ($serviceIds === []) {
+            return;
+        }
+
+        $matchingServices = \App\Models\Service::whereIn('id', $serviceIds)
+            ->where('salon_id', $salon->id)
+            ->count();
+
+        if ($matchingServices !== count(array_unique($serviceIds))) {
+            throw ValidationException::withMessages([
+                'service_ids' => ['Tous les services doivent appartenir au salon de l’employé.'],
+            ]);
+        }
     }
 }

@@ -10,7 +10,9 @@ use App\Models\Service;
 use App\Services\AppointmentAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 use App\Http\Controllers\Controller;
 
 class AppointmentController extends Controller
@@ -48,22 +50,42 @@ class AppointmentController extends Controller
         $salon = \App\Models\Salon::findOrFail($validated['salon_id']);
         $scheduledAt = \Illuminate\Support\Carbon::parse($validated['scheduled_at']);
 
-        $employee = $this->availability->findAvailableEmployee($salon, $service, $scheduledAt, $service->duration);
-
-        if (!$employee) {
-            return response()->json(['error' => 'Aucun employé disponible pour ce créneau.'], 409);
+        if ($service->salon_id !== $salon->id) {
+            throw ValidationException::withMessages([
+                'service_id' => ['Le service sélectionné n’appartient pas à ce salon.'],
+            ]);
         }
 
-        $appointment = Appointment::create([
-            'client_id' => Auth::id(),
-            'salon_id' => $salon->id,
-            'service_id' => $service->id,
-            'employee_id' => $employee->id,
-            'scheduled_at' => $scheduledAt,
-            'duration' => $service->duration,
-            'price' => $service->price,
-            'status' => 'pending',
-        ]);
+        $appointment = DB::transaction(function () use ($salon, $service, $scheduledAt) {
+            // Sérialise le choix d'un employé pour éviter une double réservation
+            // lorsque deux requêtes arrivent exactement au même moment.
+            $employee = $this->availability->findAvailableEmployee(
+                $salon,
+                $service,
+                $scheduledAt,
+                $service->duration,
+                lockForUpdate: true,
+            );
+
+            if (!$employee) {
+                return null;
+            }
+
+            return Appointment::create([
+                'client_id' => Auth::id(),
+                'salon_id' => $salon->id,
+                'service_id' => $service->id,
+                'employee_id' => $employee->id,
+                'scheduled_at' => $scheduledAt,
+                'duration' => $service->duration,
+                'price' => $service->price,
+                'status' => 'pending',
+            ]);
+        }, attempts: 3);
+
+        if (!$appointment) {
+            return response()->json(['error' => 'Aucun employé disponible pour ce créneau.'], 409);
+        }
 
         $appointment->load('client', 'salon', 'service');
         Mail::to($appointment->client->email)->send(new AppointmentCreated($appointment));

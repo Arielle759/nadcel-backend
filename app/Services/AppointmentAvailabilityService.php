@@ -40,9 +40,18 @@ class AppointmentAvailabilityService
         Salon $salon,
         Service $service,
         Carbon $scheduledAt,
-        int $duration
+        int $duration,
+        bool $lockForUpdate = false
     ): ?Employee {
-        foreach ($service->employees()->where('salon_id', $salon->id)->get() as $employee) {
+        $employees = $service->employees()
+            ->where('salon_id', $salon->id)
+            ->orderBy('employees.id');
+
+        if ($lockForUpdate) {
+            $employees->lockForUpdate();
+        }
+
+        foreach ($employees->get() as $employee) {
             if ($this->isEmployeeAvailable($employee, $scheduledAt, $duration)) {
                 return $employee;
             }
