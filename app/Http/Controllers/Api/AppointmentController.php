@@ -25,19 +25,31 @@ class AppointmentController extends Controller
 
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            // scope=salon : l'agenda du gérant, sans ses réservations personnelles de client.
+            'scope'    => 'sometimes|string|in:salon',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
         $user = $request->user();
-        $query = Appointment::with('salon', 'service', 'employee.user', 'client', 'review');
+        $query = Appointment::with('salon', 'service', 'employee:id,salon_id,name', 'client', 'review');
 
         if ($user->hasRole('admin')) {
             // pas de filtre, voit tout
         } elseif ($user->hasRole('gerant')) {
-            $query->where(fn ($q) => $q->where('client_id', $user->id)
-                ->orWhereHas('salon', fn ($sq) => $sq->where('manager_id', $user->id)));
+            if (($validated['scope'] ?? null) === 'salon') {
+                $query->whereHas('salon', fn ($sq) => $sq->where('manager_id', $user->id));
+            } else {
+                $query->where(fn ($q) => $q->where('client_id', $user->id)
+                    ->orWhereHas('salon', fn ($sq) => $sq->where('manager_id', $user->id)));
+            }
         } else {
             $query->where('client_id', $user->id);
         }
 
-        return response()->json($query->orderBy('scheduled_at', 'desc')->paginate(10));
+        return response()->json(
+            $query->orderBy('scheduled_at', 'desc')->paginate($validated['per_page'] ?? 10)
+        );
     }
 
     public function store(Request $request)

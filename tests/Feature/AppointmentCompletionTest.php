@@ -143,4 +143,28 @@ class AppointmentCompletionTest extends TestCase
         $this->assertSame(1, $especes['count']);
         $this->assertEquals(18000, $especes['amount']);
     }
+
+    public function test_salon_scope_lists_only_the_managed_salon_appointments(): void
+    {
+        $salonAppointment = $this->appointment();
+
+        // Le gérant a aussi réservé, comme client, dans un autre salon.
+        $otherSalon = Salon::factory()->verified()->create();
+        $otherService = Service::factory()->for($otherSalon)->create();
+        $personal = Appointment::factory()->create([
+            'client_id'  => $this->manager->id,
+            'salon_id'   => $otherSalon->id,
+            'service_id' => $otherService->id,
+        ]);
+
+        $ids = collect($this->actingAs($this->manager, 'api')
+            ->getJson('/api/appointments?scope=salon&per_page=100')
+            ->assertOk()
+            ->json('data'))->pluck('id');
+
+        $this->assertTrue($ids->contains($salonAppointment->id));
+        $this->assertFalse($ids->contains($personal->id));
+
+        $this->actingAs($this->manager, 'api')->getJson('/api/appointments?per_page=500')->assertUnprocessable();
+    }
 }
