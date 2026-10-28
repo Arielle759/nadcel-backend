@@ -16,6 +16,7 @@ class SalonPolicyTest extends TestCase
     {
         parent::setUp();
         Role::create(['name' => 'admin']);
+        Role::create(['name' => 'gerant']); // accordé au demandeur lors de la validation
     }
 
     public function test_manager_can_update_own_salon(): void

@@ -35,6 +35,12 @@ class AdminController extends Controller
     {
         $salon->verify();
 
+        // La validation de la demande fait du demandeur un gérant.
+        $manager = $salon->manager;
+        if ($manager && !$manager->hasRole('gerant')) {
+            $manager->assignRole('gerant');
+        }
+
         return response()->json($salon);
     }
 

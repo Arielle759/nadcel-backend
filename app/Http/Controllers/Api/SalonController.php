@@ -54,8 +54,22 @@ class SalonController extends Controller
     }
 
     // POST /api/salons - Créer un salon
+    // POST /api/salons - Demande de partenariat.
+    // Le salon est créé « en attente » (non vérifié, invisible du public). Le rôle
+    // gérant n'est accordé qu'à la validation par l'administrateur (AdminController).
     public function store(Request $request)
     {
+        $user = $request->user();
+        $hasPendingRequest = Salon::where('manager_id', $user->id)
+            ->where('is_verified', false)
+            ->where('is_active', true)
+            ->exists();
+        if ($hasPendingRequest && !$user->hasRole('admin')) {
+            return response()->json([
+                'message' => 'Vous avez déjà une demande de partenariat en cours d\'examen.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'name'        => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -78,12 +92,30 @@ class SalonController extends Controller
             'slug'       => $slug,
         ]);
 
-        $user = $request->user();
-        if (!$user->hasRole('gerant')) {
-            $user->assignRole('gerant');
-        }
-
         return response()->json($salon, 201);
+    }
+
+    // GET /api/my-salons - Les salons de l'utilisateur et l'état de leur demande,
+    // y compris pour un client dont la demande n'est pas encore validée.
+    public function mine(Request $request)
+    {
+        $salons = Salon::where('manager_id', $request->user()->id)
+            ->orderByDesc('created_at')
+            ->get(['id', 'name', 'city', 'is_verified', 'is_active', 'created_at'])
+            ->map(fn (Salon $salon) => [
+                'id'         => $salon->id,
+                'name'       => $salon->name,
+                'city'       => $salon->city,
+                'status'     => match (true) {
+                    $salon->is_verified && $salon->is_active => 'verified',
+                    $salon->is_verified                      => 'suspended',
+                    $salon->is_active                        => 'pending',
+                    default                                  => 'rejected',
+                },
+                'created_at' => $salon->created_at,
+            ]);
+
+        return response()->json($salons);
     }
 
     // GET /api/salons/{id} - Détails d'un salon

@@ -33,7 +33,9 @@ Route::post('/auth/register', function (Request $request) {
         'name'     => 'required|string|max:255',
         'email'    => 'required|email|unique:users,email',
         'password' => 'required|string|min:12|max:72',
-        'role'     => 'sometimes|string|in:client,gerant',
+        // Toute inscription crée un compte client. Le rôle gérant s'obtient
+        // uniquement quand l'administrateur valide une demande de partenariat.
+        'role'     => 'sometimes|string|in:client',
     ]);
 
     return \Illuminate\Support\Facades\DB::transaction(function () use ($validated) {
@@ -43,7 +45,7 @@ Route::post('/auth/register', function (Request $request) {
         'password' => Hash::make($validated['password']),
     ]);
 
-    $user->assignRole($validated['role'] ?? 'client');
+    $user->assignRole('client');
 
     $token = auth('api')->login($user);
 
@@ -64,7 +66,10 @@ Route::get('/services/{service}', [Api\ServiceController::class, 'show']);
 
 // Routes protégées
 Route::middleware('auth:api')->group(function () {
-    Route::apiResource('salons', Api\SalonController::class)->except(['index', 'show']);
+    // Demande de partenariat : limitée pour éviter les créations de salons en masse.
+    Route::post('salons', [Api\SalonController::class, 'store'])->middleware('throttle:10,60');
+    Route::get('my-salons', [Api\SalonController::class, 'mine']);
+    Route::apiResource('salons', Api\SalonController::class)->except(['index', 'show', 'store']);
     Route::apiResource('services', Api\ServiceController::class)->except(['index', 'show']);
     Route::apiResource('employees', Api\EmployeeController::class);
     Route::apiResource('appointments', Api\AppointmentController::class)->except(['destroy']);
