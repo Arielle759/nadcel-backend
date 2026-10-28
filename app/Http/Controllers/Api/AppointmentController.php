@@ -7,6 +7,8 @@ use App\Mail\AppointmentConfirmed;
 use App\Mail\AppointmentCreated;
 use App\Models\Appointment;
 use App\Models\Service;
+use App\Models\Salon;
+use Illuminate\Support\Facades\Gate;
 use App\Services\AppointmentAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +31,8 @@ class AppointmentController extends Controller
         if ($user->hasRole('admin')) {
             // pas de filtre, voit tout
         } elseif ($user->hasRole('gerant')) {
-            $query->whereHas('salon', fn ($q) => $q->where('manager_id', $user->id));
+            $query->where(fn ($q) => $q->where('client_id', $user->id)
+                ->orWhereHas('salon', fn ($sq) => $sq->where('manager_id', $user->id)));
         } else {
             $query->where('client_id', $user->id);
         }
@@ -42,13 +45,15 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'salon_id' => 'required|exists:salons,id',
             'service_id' => 'required|exists:services,id',
-            'employee_id' => 'nullable|exists:employees,id',
+            'employee_id' => 'nullable|integer|exists:employees,id',
             'scheduled_at' => 'required|date|after:now',
         ]);
 
-        $service = Service::findOrFail($validated['service_id']);
-        $salon = \App\Models\Salon::findOrFail($validated['salon_id']);
-        $scheduledAt = \Illuminate\Support\Carbon::parse($validated['scheduled_at']);
+        $scheduledAt = \Illuminate\Support\Carbon::parse($validated['scheduled_at'])
+            ->setTimezone(config('app.timezone'));
+        $appointment = DB::transaction(function () use ($validated, $scheduledAt) {
+        $salon = Salon::lockForUpdate()->findOrFail($validated['salon_id']);
+        $service = Service::lockForUpdate()->findOrFail($validated['service_id']);
 
         if ($service->salon_id !== $salon->id) {
             throw ValidationException::withMessages([
@@ -56,7 +61,23 @@ class AppointmentController extends Controller
             ]);
         }
 
-        $appointment = DB::transaction(function () use ($salon, $service, $scheduledAt) {
+        abort_unless($salon->is_active && $salon->is_verified && $service->is_active, 404);
+
+        if (isset($validated['employee_id']) && !$service->employees()
+            ->where('employees.salon_id', $salon->id)->where('employees.id', $validated['employee_id'])->exists()) {
+            throw ValidationException::withMessages([
+                'employee_id' => ['Cet employé ne réalise pas ce service dans ce salon.'],
+            ]);
+        }
+
+        $hours = $salon->openingHoursFor($scheduledAt);
+        $appointmentEnd = $scheduledAt->copy()->addMinutes($service->duration);
+        if (!$hours || $scheduledAt->lt($hours['open']) || $appointmentEnd->gt($hours['close'])) {
+            throw ValidationException::withMessages([
+                'scheduled_at' => ['Ce créneau est en dehors des horaires d’ouverture du salon.'],
+            ]);
+        }
+
             // Sérialise le choix d'un employé pour éviter une double réservation
             // lorsque deux requêtes arrivent exactement au même moment.
             $employee = $this->availability->findAvailableEmployee(
@@ -65,6 +86,7 @@ class AppointmentController extends Controller
                 $scheduledAt,
                 $service->duration,
                 lockForUpdate: true,
+                employeeId: $validated['employee_id'] ?? null,
             );
 
             if (!$employee) {
@@ -103,31 +125,30 @@ class AppointmentController extends Controller
     public function update(Request $request, Appointment $appointment)
     {
         $validated = $request->validate([
-            'status' => 'required|string|in:pending,confirmed,in_progress,completed,cancelled',
+            'status' => 'required|string|in:pending,confirmed,completed,cancelled',
         ]);
 
         $user = $request->user();
         $nouveauStatut = $validated['status'];
 
-        if ($user->hasRole('client')) {
-            if ($appointment->client_id !== $user->id || $nouveauStatut !== 'cancelled') {
-                return response()->json(['error' => 'Action non autorisée'], 403);
+        $appointment = DB::transaction(function () use ($appointment, $user, $nouveauStatut) {
+            $locked = Appointment::lockForUpdate()->findOrFail($appointment->id);
+            if (!Gate::forUser($user)->allows('manage', $locked)) {
+                abort_unless($locked->client_id === $user->id && $nouveauStatut === 'cancelled', 403);
             }
-        } else {
-            $this->authorize('manage', $appointment);
-            if (!$appointment->canTransitionTo($nouveauStatut)) {
-                return response()->json(['error' => 'Transition invalide'], 422);
+            if (!$locked->canTransitionTo($nouveauStatut)) {
+                throw ValidationException::withMessages(['status' => ['Transition invalide.']]);
             }
-        }
-
-        $appointment->update(['status' => $nouveauStatut]);
+            $locked->update(['status' => $nouveauStatut]);
+            return $locked;
+        }, attempts: 3);
         $appointment->load('client', 'salon.manager', 'service');
 
         if ($nouveauStatut === 'confirmed') {
             Mail::to($appointment->client->email)->send(new AppointmentConfirmed($appointment));
         } elseif ($nouveauStatut === 'cancelled') {
             $initiatedByClient = $user->id === $appointment->client_id;
-            if ($initiatedByClient) {
+            if ($initiatedByClient && $appointment->salon?->manager) {
                 Mail::to($appointment->salon->manager->email)->send(new AppointmentCancelled($appointment, true));
             } else {
                 Mail::to($appointment->client->email)->send(new AppointmentCancelled($appointment, false));
@@ -139,16 +160,17 @@ class AppointmentController extends Controller
 
     public function pay(Request $request, Appointment $appointment)
     {
-        $this->authorize('pay', $appointment);
-
-        if ($appointment->status === 'cancelled') {
-            return response()->json(['error' => 'Cannot pay a cancelled appointment.'], 422);
-        }
-        if ($appointment->payment_status === 'paid') {
-            return response()->json($appointment->load('salon', 'service', 'employee', 'client'));
-        }
-
-        $appointment->update(['payment_status' => 'paid']);
+        $appointment = DB::transaction(function () use ($appointment) {
+            $locked = Appointment::lockForUpdate()->findOrFail($appointment->id);
+            $this->authorize('pay', $locked);
+            if ($locked->status === 'cancelled') {
+                throw ValidationException::withMessages(['status' => ['Cannot pay a cancelled appointment.']]);
+            }
+            if ($locked->payment_status !== 'paid') {
+                $locked->update(['payment_status' => 'paid']);
+            }
+            return $locked;
+        }, attempts: 3);
         return response()->json($appointment->load('salon', 'service', 'employee', 'client'));
     }
 }

@@ -19,7 +19,18 @@ class AppointmentAvailabilityService
     ): bool {
         $newEnd = $scheduledAt->copy()->addMinutes($duration);
 
-        $existing = Appointment::where('employee_id', $employee->id)
+        $query = Appointment::where('employee_id', $employee->id)
+            ->where('scheduled_at', '<', $newEnd);
+        $endExpression = match ($query->getConnection()->getDriverName()) {
+            'pgsql' => "scheduled_at + duration * interval '1 minute'",
+            'sqlite' => "datetime(scheduled_at, '+' || duration || ' minutes')",
+            'mysql', 'mariadb' => 'DATE_ADD(scheduled_at, INTERVAL duration MINUTE)',
+            default => null,
+        };
+        if ($endExpression !== null) {
+            $query->whereRaw($endExpression.' > ?', [$scheduledAt->toDateTimeString()]);
+        }
+        $existing = $query
             ->whereNotIn('status', ['cancelled'])
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
             ->get(['scheduled_at', 'duration']);
@@ -41,10 +52,12 @@ class AppointmentAvailabilityService
         Service $service,
         Carbon $scheduledAt,
         int $duration,
-        bool $lockForUpdate = false
+        bool $lockForUpdate = false,
+        ?int $employeeId = null
     ): ?Employee {
         $employees = $service->employees()
-            ->where('salon_id', $salon->id)
+            ->where('employees.salon_id', $salon->id)
+            ->when($employeeId !== null, fn ($q) => $q->where('employees.id', $employeeId))
             ->orderBy('employees.id');
 
         if ($lockForUpdate) {
@@ -107,22 +120,27 @@ class AppointmentAvailabilityService
     }
 
     /**
-     * Renvoie true si le jour contient au moins un créneau libre (9h-19h, pas 30 min).
+     * Renvoie true si le jour contient au moins un créneau libre (pas 30 min)
+     * entre $open et $close (horaires d'ouverture du salon ce jour-là).
      *
      * @param Collection<int, Employee>    $employees
      * @param Collection<int, Appointment> $appointments
+     * @param Carbon|null                  $notBefore  ignore les créneaux avant cette heure (aujourd'hui déjà entamé)
      */
     public function isDayAvailable(
         Collection $employees,
-        Carbon $day,
+        Carbon $open,
+        Carbon $close,
         int $duration,
-        Collection $appointments
+        Collection $appointments,
+        ?Carbon $notBefore = null
     ): bool {
-        $slot   = $day->copy()->setTime(9, 0);
-        $cutoff = $day->copy()->setTime(19, 0)->subMinutes($duration);
+        $slot   = $open->copy();
+        $cutoff = $close->copy()->subMinutes($duration);
 
         while ($slot->lte($cutoff)) {
-            if ($this->hasAvailableEmployee($employees, $slot, $duration, $appointments)) {
+            $isPast = $notBefore && $slot->lt($notBefore);
+            if (!$isPast && $this->hasAvailableEmployee($employees, $slot, $duration, $appointments)) {
                 return true;
             }
             $slot->addMinutes(30);
@@ -132,24 +150,29 @@ class AppointmentAvailabilityService
     }
 
     /**
-     * Retourne la liste des heures disponibles ("H:i") pour un jour donné.
+     * Retourne la liste des heures disponibles ("H:i") entre $open et $close
+     * (horaires d'ouverture du salon ce jour-là).
      *
      * @param  Collection<int, Employee>    $employees
      * @param  Collection<int, Appointment> $appointments
+     * @param  Carbon|null                  $notBefore  ignore les créneaux avant cette heure (aujourd'hui déjà entamé)
      * @return list<string>
      */
     public function availableSlotsForDay(
         Collection $employees,
-        Carbon $day,
+        Carbon $open,
+        Carbon $close,
         int $duration,
-        Collection $appointments
+        Collection $appointments,
+        ?Carbon $notBefore = null
     ): array {
-        $slot   = $day->copy()->setTime(9, 0);
-        $cutoff = $day->copy()->setTime(19, 0)->subMinutes($duration);
+        $slot   = $open->copy();
+        $cutoff = $close->copy()->subMinutes($duration);
         $slots  = [];
 
         while ($slot->lte($cutoff)) {
-            if ($this->hasAvailableEmployee($employees, $slot, $duration, $appointments)) {
+            $isPast = $notBefore && $slot->lt($notBefore);
+            if (!$isPast && $this->hasAvailableEmployee($employees, $slot, $duration, $appointments)) {
                 $slots[] = $slot->format('H:i');
             }
             $slot->addMinutes(30);

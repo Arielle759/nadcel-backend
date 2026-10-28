@@ -44,7 +44,7 @@ return [
     ],
 
     'api' => [
-        'driver' => 'jwt',
+        'driver' => 'password-bound-jwt',
         'provider' => 'users',
     ],
 ],

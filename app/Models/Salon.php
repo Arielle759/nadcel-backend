@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -76,13 +78,19 @@ class Salon extends Model
         'logo',
         'cover',
         'rating',
+        'opening_hours',
     ];
 
     protected $casts = [
         'rating' => 'decimal:2',
         'is_active' => 'boolean',
         'is_verified' => 'boolean',
+        'opening_hours' => 'array',
     ];
+
+    private const DEFAULT_OPEN = '09:00';
+    private const DEFAULT_CLOSE = '19:00';
+    private const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
     public function verify(): void
     {
@@ -134,5 +142,79 @@ class Salon extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function closures(): HasMany
+    {
+        return $this->hasMany(SalonClosure::class);
+    }
+
+    /**
+     * Whether $user may see this salon regardless of its verification/active
+     * status (its own manager, or an admin) — everyone else only sees it
+     * when it's active and verified.
+     */
+    public function isVisibleTo(?User $user): bool
+    {
+        if ($user && ($user->id === $this->manager_id || $user->hasRole('admin'))) {
+            return true;
+        }
+
+        return $this->is_active && $this->is_verified;
+    }
+
+    /** @param Builder<Salon> $query */
+    public function scopeVisibleTo(Builder $query, ?User $user): Builder
+    {
+        if ($user && $user->hasRole('admin')) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($user) {
+            $q->where('is_active', true)->where('is_verified', true);
+            if ($user) {
+                $q->orWhere('manager_id', $user->id);
+            }
+        });
+    }
+
+    /**
+     * Opening hours for a given day, or null if the salon is closed that day
+     * (explicit weekly closing, or a one-off entry in `salon_closures`).
+     * Falls back to a 9h-19h default when no `opening_hours` has been set.
+     *
+     * @param  list<string>|null  $closedDates  pre-fetched 'Y-m-d' closures, to avoid
+     *                                          one query per day when resolving a whole month
+     * @return array{open: Carbon, close: Carbon}|null
+     */
+    public function openingHoursFor(Carbon $day, ?array $closedDates = null): ?array
+    {
+        $dateString = $day->toDateString();
+        $isClosed = $closedDates !== null
+            ? in_array($dateString, $closedDates, true)
+            : $this->closures()->whereDate('closed_date', $dateString)->exists();
+
+        if ($isClosed) {
+            return null;
+        }
+
+        if ($this->opening_hours === null) {
+            return [
+                'open' => $day->copy()->setTimeFromTimeString(self::DEFAULT_OPEN),
+                'close' => $day->copy()->setTimeFromTimeString(self::DEFAULT_CLOSE),
+            ];
+        }
+
+        $dayKey = self::DAY_KEYS[$day->dayOfWeekIso - 1];
+        $hours = $this->opening_hours[$dayKey] ?? null;
+
+        if (empty($hours['open']) || empty($hours['close'])) {
+            return null;
+        }
+
+        $open = $day->copy()->setTimeFromTimeString($hours['open']);
+        $close = $day->copy()->setTimeFromTimeString($hours['close']);
+
+        return $open->lt($close) ? ['open' => $open, 'close' => $close] : null;
     }
 }

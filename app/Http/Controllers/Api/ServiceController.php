@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Service;
 use App\Models\Salon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\Controller;
 
@@ -15,6 +16,7 @@ class ServiceController extends Controller
     {
         $services = Service::where('is_active', true)
             ->when($request->query('salon_id'), fn ($q, $salonId) => $q->where('salon_id', $salonId))
+            ->whereIn('salon_id', Salon::visibleTo(Auth::user())->select('id'))
             ->with('salon')
             ->paginate(10);
 
@@ -48,7 +50,11 @@ class ServiceController extends Controller
     // GET /api/services/{id} - Détails d'un service
     public function show(Service $service)
     {
-        $service->load('salon', 'employees');
+        if (!$service->is_active || !$service->salon?->isVisibleTo(Auth::user())) {
+            abort(404);
+        }
+
+        $service->load('salon', 'employees:id,salon_id,name');
         return response()->json($service);
     }
 

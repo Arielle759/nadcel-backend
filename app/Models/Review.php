@@ -65,6 +65,6 @@ class Review extends Model
 
     public function salon(): BelongsTo
     {
-        return $this->belongsTo(Salon::class);
+        return $this->belongsTo(Salon::class)->withTrashed();
     }
 }

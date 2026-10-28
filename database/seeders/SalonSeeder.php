@@ -15,6 +15,9 @@ class SalonSeeder extends Seeder
 {
     public function run(): void
     {
+        if (!app()->environment(['local', 'testing'])) {
+            throw new \RuntimeException('Demo seeding is restricted to local and testing environments.');
+        }
         $clients = User::factory()->count(15)->create();
 
         $salonsData = [

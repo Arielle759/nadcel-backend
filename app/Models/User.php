@@ -40,9 +40,13 @@ class User extends Authenticatable implements JWTSubject
 
     public function getJWTCustomClaims()
     {
-        return [];
+        return ['credential' => $this->jwtCredential()];
     }
 
+    public function jwtCredential(): string
+    {
+        return hash_hmac('sha256', $this->getAuthPassword(), (string) config('app.key'));
+    }
     public function salons(): HasMany
     {
         return $this->hasMany(Salon::class, 'manager_id');

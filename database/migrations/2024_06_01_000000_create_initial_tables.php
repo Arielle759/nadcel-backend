@@ -103,6 +103,5 @@ return new class extends Migration
         Schema::dropIfExists('employees');
         Schema::dropIfExists('services');
         Schema::dropIfExists('salons');
-        Schema::dropIfExists('users');
     }
 };

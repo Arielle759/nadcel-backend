@@ -91,12 +91,12 @@ class Appointment extends Model
 
     public function salon(): BelongsTo
     {
-        return $this->belongsTo(Salon::class);
+        return $this->belongsTo(Salon::class)->withTrashed();
     }
 
     public function service(): BelongsTo
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(Service::class)->withTrashed();
     }
 
     public function employee(): BelongsTo

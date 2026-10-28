@@ -11,19 +11,41 @@ use App\Http\Controllers\Controller;
 
 class SalonController extends Controller
 {
-    // GET /api/salons - Lister tous les salons
-    public function index()
+    // GET /api/salons - Lister tous les salons (filtre optionnel : q = ville, quartier, nom ou service recherché)
+    public function index(Request $request)
     {
+        $validated = $request->validate([
+            'q'        => 'sometimes|string|max:255',
+            'per_page' => 'sometimes|integer|min:1|max:50',
+        ]);
+
         $salons = Salon::where('is_active', true)
             ->where('is_verified', true)
-            ->with(['manager', 'services:id,salon_id,category'])
-            ->paginate(10);
+            ->when($validated['q'] ?? null, function ($q, $term) {
+                $term = mb_strtolower($term);
+                $q->where(function ($inner) use ($term) {
+                    $inner->whereRaw('LOWER(name) LIKE ?', ["%{$term}%"])
+                        ->orWhereRaw('LOWER(city) LIKE ?', ["%{$term}%"])
+                        ->orWhereRaw('LOWER(address) LIKE ?', ["%{$term}%"])
+                        ->orWhereHas('services', function ($sq) use ($term) {
+                            $sq->where('is_active', true)
+                                ->where(function ($sq2) use ($term) {
+                                    $sq2->whereRaw('LOWER(category) LIKE ?', ["%{$term}%"])
+                                        ->orWhereRaw('LOWER(name) LIKE ?', ["%{$term}%"]);
+                                });
+                        });
+                });
+            })
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
+            ->with(['manager:id,name', 'services' => fn ($q) => $q->where('is_active', true)->select('id', 'salon_id', 'category')])
+            ->paginate($validated['per_page'] ?? 10);
 
         $salons->getCollection()->transform(function (Salon $salon) {
-            $salon->service_categories = $salon->services
+            $salon->setAttribute('service_categories', $salon->services
                 ->pluck('category')
                 ->unique()
-                ->values();
+                ->values());
             $salon->unsetRelation('services');
             return $salon;
         });
@@ -46,7 +68,7 @@ class SalonController extends Controller
         $base    = Str::slug($validated['name']);
         $slug    = $base;
         $counter = 2;
-        while (Salon::where('slug', $slug)->exists()) {
+        while (Salon::withTrashed()->where('slug', $slug)->exists()) {
             $slug = $base . '-' . $counter++;
         }
 
@@ -67,17 +89,12 @@ class SalonController extends Controller
     // GET /api/salons/{id} - Détails d'un salon
     public function show(Salon $salon)
     {
-        /** @var \App\Models\User|null $user */
-        $user = Auth::user();
-
-        if (!$salon->is_verified) {
-            $isOwnerOrAdmin = $user && ($user->id === $salon->manager_id || $user->hasRole('admin'));
-            if (!$isOwnerOrAdmin) {
-                abort(404);
-            }
+        if (!$salon->isVisibleTo(Auth::user())) {
+            abort(404);
         }
 
-        $salon->load('manager', 'services', 'employees');
+        $salon->loadCount('reviews')->loadAvg('reviews', 'rating');
+        $salon->load(['manager:id,name', 'services' => fn ($q) => $q->where('is_active', true), 'employees:id,salon_id,name']);
         return response()->json($salon);
     }
 
@@ -95,6 +112,10 @@ class SalonController extends Controller
             'phone'       => 'sometimes|string',
             'email'       => 'nullable|email',
             'cover'       => 'nullable|image|max:2048',
+            'opening_hours' => 'sometimes|nullable|array:mon,tue,wed,thu,fri,sat,sun',
+            'opening_hours.*' => 'nullable|array:open,close',
+            'opening_hours.*.open' => 'required_with:opening_hours.*.close|date_format:H:i',
+            'opening_hours.*.close' => 'required_with:opening_hours.*.open|date_format:H:i|after:opening_hours.*.open',
         ]);
 
         if ($request->hasFile('cover')) {

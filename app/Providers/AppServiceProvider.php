@@ -18,6 +18,15 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        \Illuminate\Support\Facades\Auth::extend('password-bound-jwt', function ($app, $name, array $config) {
+            $guard = new \App\Auth\PasswordBoundJWTGuard(
+                $app['tymon.jwt'],
+                $app['auth']->createUserProvider($config['provider']),
+                $app['request']
+            );
+            $app->refresh('request', $guard, 'setRequest');
+            return $guard;
+        });
         Gate::policy(Salon::class, SalonPolicy::class);
         Gate::policy(Appointment::class, AppointmentPolicy::class);
     }

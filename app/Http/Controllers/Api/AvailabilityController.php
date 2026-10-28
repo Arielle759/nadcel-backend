@@ -9,6 +9,7 @@ use App\Services\AppointmentAvailabilityService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Carbon;
 
 class AvailabilityController extends Controller
@@ -25,10 +26,15 @@ class AvailabilityController extends Controller
             'month'      => 'required|date_format:Y-m',
         ]);
 
-        $service    = Service::findOrFail($validated['service_id']);
-        $monthStart = Carbon::createFromFormat('Y-m', $validated['month'])->startOfMonth();
+        if (!$salon->isVisibleTo(Auth::user())) {
+            abort(404);
+        }
+
+        $service    = Service::where('salon_id', $salon->id)->where('is_active', true)->findOrFail($validated['service_id']);
+        $monthStart = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
         $monthEnd   = $monthStart->copy()->endOfMonth();
         $today      = Carbon::today();
+        $now        = Carbon::now();
 
         // Une seule requête pour tous les RDV du mois
         $appointments = Appointment::where('salon_id', $salon->id)
@@ -42,18 +48,30 @@ class AvailabilityController extends Controller
         // Une seule requête pour les employés compétents dans ce salon
         $employees = $service->employees()->where('salon_id', $salon->id)->get();
 
+        // Une seule requête pour les fermetures exceptionnelles du mois
+        $closedDates = $salon->closures()
+            ->whereBetween('closed_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->pluck('closed_date')
+            ->map(fn ($date) => $date->toDateString())
+            ->all();
+
         $result  = [];
         $current = $monthStart->copy();
 
         while ($current->lte($monthEnd)) {
-            $result[$current->toDateString()] = $current->lt($today)
-                ? false
-                : $this->availability->isDayAvailable(
+            if ($current->lt($today)) {
+                $result[$current->toDateString()] = false;
+            } else {
+                $hours = $salon->openingHoursFor($current, $closedDates);
+                $result[$current->toDateString()] = $hours !== null && $this->availability->isDayAvailable(
                     $employees,
-                    $current,
+                    $hours['open'],
+                    $hours['close'],
                     $service->duration,
                     $appointments,
+                    $current->isToday() ? $now : null,
                 );
+            }
 
             $current->addDay();
         }
@@ -68,14 +86,24 @@ class AvailabilityController extends Controller
             'service_id' => 'required|exists:services,id',
         ]);
 
-        $day   = Carbon::parse($date)->startOfDay();
+        if (!$salon->isVisibleTo(Auth::user())) {
+            abort(404);
+        }
+
+        validator(['date' => $date], ['date' => 'required|date_format:Y-m-d'])->validate();
+        $day   = Carbon::createFromFormat('!Y-m-d', $date);
         $today = Carbon::today();
 
         if ($day->lt($today)) {
             return response()->json([]);
         }
 
-        $service = Service::findOrFail($validated['service_id']);
+        $service = Service::where('salon_id', $salon->id)->where('is_active', true)->findOrFail($validated['service_id']);
+
+        $hours = $salon->openingHoursFor($day);
+        if ($hours === null) {
+            return response()->json([]);
+        }
 
         $appointments = Appointment::where('salon_id', $salon->id)
             ->whereNotIn('status', ['cancelled'])
@@ -85,7 +113,14 @@ class AvailabilityController extends Controller
         $employees = $service->employees()->where('salon_id', $salon->id)->get();
 
         return response()->json(
-            $this->availability->availableSlotsForDay($employees, $day, $service->duration, $appointments)
+            $this->availability->availableSlotsForDay(
+                $employees,
+                $hours['open'],
+                $hours['close'],
+                $service->duration,
+                $appointments,
+                $day->isToday() ? Carbon::now() : null,
+            )
         );
     }
 }

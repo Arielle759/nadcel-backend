@@ -16,9 +16,14 @@ class EmployeeController extends Controller
 {
     public function index(Request $request)
     {
-        $salonId = $request->query('salon_id');
+        $validated = $request->validate([
+            'salon_id' => 'required|exists:salons,id',
+        ]);
 
-        $employees = Employee::when($salonId, fn ($q) => $q->where('salon_id', $salonId))
+        $salon = Salon::findOrFail($validated['salon_id']);
+        $this->authorize('manageEmployees', $salon);
+
+        $employees = Employee::where('salon_id', $salon->id)
             ->with('salon', 'user', 'services')
             ->paginate(10);
 
@@ -67,6 +72,8 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee)
     {
+        $this->authorize('manageEmployees', $employee->salon);
+
         $employee->load('salon', 'user', 'services', 'appointments');
         return response()->json($employee);
     }

@@ -13,7 +13,7 @@ Route::get('/health', function () {
 Route::post('/auth/login', function (Request $request) {
     $credentials = $request->validate([
         'email' => 'required|email',
-        'password' => 'required',
+        'password' => 'required|string|max:1024',
     ]);
 
     $token = auth('api')->attempt($credentials);
@@ -32,10 +32,11 @@ Route::post('/auth/register', function (Request $request) {
     $validated = $request->validate([
         'name'     => 'required|string|max:255',
         'email'    => 'required|email|unique:users,email',
-        'password' => 'required|string|min:8',
+        'password' => 'required|string|min:12|max:72',
         'role'     => 'sometimes|string|in:client,gerant',
     ]);
 
+    return \Illuminate\Support\Facades\DB::transaction(function () use ($validated) {
     $user = User::create([
         'name'     => $validated['name'],
         'email'    => $validated['email'],
@@ -50,12 +51,13 @@ Route::post('/auth/register', function (Request $request) {
         'token' => $token,
         'user'  => $user->load('roles'),
     ], 201);
+    });
 })->middleware('throttle:10,1');
 
 // Routes publiques (lecture seule uniquement)
 Route::get('/salons', [Api\SalonController::class, 'index']);
-Route::get('/salons/{salon}/availability', [Api\AvailabilityController::class, 'month']);
-Route::get('/salons/{salon}/availability/{date}', [Api\AvailabilityController::class, 'day']);
+Route::get('/salons/{salon}/availability', [Api\AvailabilityController::class, 'month'])->middleware('throttle:60,1');
+Route::get('/salons/{salon}/availability/{date}', [Api\AvailabilityController::class, 'day'])->middleware('throttle:60,1');
 Route::get('/salons/{salon}', [Api\SalonController::class, 'show']);
 Route::get('/services', [Api\ServiceController::class, 'index']);
 Route::get('/services/{service}', [Api\ServiceController::class, 'show']);

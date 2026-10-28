@@ -52,7 +52,7 @@ class Employee extends Model
 
     public function salon(): BelongsTo
     {
-        return $this->belongsTo(Salon::class);
+        return $this->belongsTo(Salon::class)->withTrashed();
     }
 
     /** @return BelongsToMany<Service, $this> */

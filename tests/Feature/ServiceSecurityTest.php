@@ -75,4 +75,40 @@ class ServiceSecurityTest extends TestCase
 
         $response->assertStatus(201);
     }
+
+    public function test_services_of_unverified_salon_are_hidden_from_public(): void
+    {
+        $manager = User::factory()->create();
+        $salon   = Salon::factory()->for($manager, 'manager')->create(); // is_verified = false
+        $service = \App\Models\Service::factory()->for($salon)->create();
+
+        $this->getJson("/api/services/{$service->id}")->assertStatus(404);
+        $this->getJson('/api/services?salon_id=' . $salon->id)
+             ->assertJsonCount(0, 'data');
+    }
+
+    public function test_manager_can_still_see_own_unverified_salons_services(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('gerant');
+        $salon   = Salon::factory()->for($manager, 'manager')->create(); // is_verified = false
+        $service = \App\Models\Service::factory()->for($salon)->create();
+
+        $response = $this->actingAs($manager, 'api')->getJson("/api/services/{$service->id}");
+
+        $response->assertStatus(200);
+    }
+
+    public function test_manager_can_still_list_own_unverified_salons_services(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('gerant');
+        $salon   = Salon::factory()->for($manager, 'manager')->create(); // is_verified = false
+        \App\Models\Service::factory()->for($salon)->create();
+
+        $response = $this->actingAs($manager, 'api')
+                         ->getJson('/api/services?salon_id=' . $salon->id);
+
+        $response->assertStatus(200)->assertJsonCount(1, 'data');
+    }
 }

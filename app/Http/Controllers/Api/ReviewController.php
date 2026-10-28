@@ -11,6 +11,10 @@ class ReviewController extends Controller
 {
     public function index()
     {
+        if (!auth()->user()->hasRole('admin')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
         $reviews = Review::with('client', 'salon', 'appointment')->paginate(10);
         return response()->json($reviews);
     }
@@ -23,7 +27,8 @@ class ReviewController extends Controller
             'comment' => 'nullable|string|max:1000',
         ]);
 
-        $appointment = Appointment::findOrFail($validated['appointment_id']);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($validated) {
+        $appointment = Appointment::lockForUpdate()->findOrFail($validated['appointment_id']);
 
         if ($appointment->client_id !== auth()->id()) {
             return response()->json(['error' => 'This appointment does not belong to you.'], 403);
@@ -46,10 +51,19 @@ class ReviewController extends Controller
         ]);
 
         return response()->json($review, 201);
+        }, attempts: 3);
     }
 
     public function show(Review $review)
     {
+        $user = auth()->user();
+        $isOwner = $user->id === $review->client_id;
+        $isManager = $user->id === $review->salon?->manager_id;
+
+        if (!$isOwner && !$isManager && !$user->hasRole('admin')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
         $review->load('client', 'salon', 'appointment');
         return response()->json($review);
     }
