@@ -69,6 +69,7 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('employees', Api\EmployeeController::class);
     Route::apiResource('appointments', Api\AppointmentController::class)->except(['destroy']);
     Route::patch('appointments/{appointment}/pay', [Api\AppointmentController::class, 'pay']);
+    Route::patch('appointments/{appointment}/complete', [Api\AppointmentController::class, 'complete']);
     Route::apiResource('reviews', Api\ReviewController::class);
 
     Route::middleware('role:gerant')->prefix('manager')->group(function () {

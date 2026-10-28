@@ -70,8 +70,14 @@ class Appointment extends Model
         'price',
         'notes',
         'payment_status',
+        'amount_paid',
+        'payment_method',
+        'paid_at',
         'reminder_sent_at',
     ];
+
+    /** Moyens de paiement utilisés sur place. */
+    const PAYMENT_METHODS = ['especes', 'wave', 'orange_money'];
 
     public function canTransitionTo(string $newStatus): bool
     {
@@ -81,7 +87,15 @@ class Appointment extends Model
     protected $casts = [
         'scheduled_at' => 'datetime',
         'price' => 'decimal:2',
+        'amount_paid' => 'decimal:2',
+        'paid_at' => 'datetime',
     ];
+
+    /** Montant réellement encaissé ; à défaut (anciens rendez-vous), le prix prévu. */
+    public function collectedAmount(): float
+    {
+        return (float) ($this->amount_paid ?? $this->price);
+    }
 
     // Relations
     public function client(): BelongsTo

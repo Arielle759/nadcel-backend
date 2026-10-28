@@ -173,4 +173,43 @@ class AppointmentController extends Controller
         }, attempts: 3);
         return response()->json($appointment->load('salon', 'service', 'employee', 'client'));
     }
+
+    // PATCH /appointments/{id}/complete
+    // Clôture d'un rendez-vous réalisé : le client est venu, le gérant note en une seule
+    // action le montant réellement encaissé sur place et le moyen de paiement utilisé.
+    public function complete(Request $request, Appointment $appointment)
+    {
+        $validated = $request->validate([
+            'amount_paid'    => 'required|numeric|min:0|max:10000000',
+            'payment_method' => 'required|string|in:'.implode(',', Appointment::PAYMENT_METHODS),
+        ]);
+
+        $appointment = DB::transaction(function () use ($appointment, $validated) {
+            $locked = Appointment::lockForUpdate()->findOrFail($appointment->id);
+            $this->authorize('pay', $locked);
+
+            if (!$locked->canTransitionTo('completed')) {
+                throw ValidationException::withMessages([
+                    'status' => ['Seul un rendez-vous confirmé peut être clôturé.'],
+                ]);
+            }
+            if ($locked->scheduled_at->isFuture()) {
+                throw ValidationException::withMessages([
+                    'status' => ['Un rendez-vous ne peut être clôturé qu’après son heure de début.'],
+                ]);
+            }
+
+            $locked->update([
+                'status'         => 'completed',
+                'payment_status' => 'paid',
+                'amount_paid'    => $validated['amount_paid'],
+                'payment_method' => $validated['payment_method'],
+                'paid_at'        => now(),
+            ]);
+
+            return $locked;
+        }, attempts: 3);
+
+        return response()->json($appointment->load('salon', 'service', 'employee', 'client'));
+    }
 }

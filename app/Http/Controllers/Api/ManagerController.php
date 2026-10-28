@@ -26,22 +26,25 @@ class ManagerController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $generated = (float) Appointment::whereIn('salon_id', $salonIds)
-            ->where('status', 'completed')
-            ->sum('price');
-        $collected = (float) Appointment::whereIn('salon_id', $salonIds)
+        // Paiement sur place : le chiffre d'affaires est la somme des montants encaissés
+        // notés à la clôture (le prix prévu sert de repli pour les anciens rendez-vous).
+        $collected = Appointment::whereIn('salon_id', $salonIds)
             ->where('status', 'completed')
             ->where('payment_status', 'paid')
-            ->sum('price');
+            ->get(['amount_paid', 'price'])
+            ->sum(fn (Appointment $a) => $a->collectedAmount());
+
+        $open = Appointment::whereIn('salon_id', $salonIds)->whereIn('status', ['pending', 'confirmed']);
 
         return response()->json([
             'salons_count' => count($salonIds),
             'appointments' => $appointmentStats,
             'revenue'      => [
-                'generated'   => $generated,
-                'collected'   => $collected,
-                'outstanding' => $generated - $collected,
+                'collected' => round((float) $collected, 2),
             ],
+            // Rendez-vous passés encore ouverts : un oubli de clôture, pas de l'argent dû.
+            'to_close'     => (clone $open)->where('scheduled_at', '<', now())->count(),
+            'upcoming'     => (clone $open)->where('scheduled_at', '>=', now())->count(),
         ]);
     }
 

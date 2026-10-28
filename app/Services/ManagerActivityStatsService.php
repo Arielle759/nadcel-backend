@@ -49,7 +49,7 @@ class ManagerActivityStatsService
             ->where('status', 'completed')
             ->whereBetween('scheduled_at', [$loadFrom, $end])
             ->with(['service:id,name', 'employee:id,name'])
-            ->get(['id', 'client_id', 'service_id', 'employee_id', 'scheduled_at', 'price']);
+            ->get(['id', 'client_id', 'service_id', 'employee_id', 'scheduled_at', 'price', 'amount_paid', 'payment_method']);
 
         $current = $appointments->filter(fn (Appointment $a) => $a->scheduled_at->between($start, $end));
         $previous = $appointments->filter(
@@ -68,9 +68,9 @@ class ManagerActivityStatsService
             ],
             'totals' => [
                 'completed'          => $current->count(),
-                'revenue'            => round((float) $current->sum('price'), 2),
+                'revenue'            => round((float) $this->revenue($current), 2),
                 'previous_completed' => $previous->count(),
-                'previous_revenue'   => round((float) $previous->sum('price'), 2),
+                'previous_revenue'   => round((float) $this->revenue($previous), 2),
                 'trend'              => $this->trend($current->count(), $previous->count()),
             ],
             'top_services' => $topServices,
@@ -78,6 +78,7 @@ class ManagerActivityStatsService
             'busy_slots'   => $this->busySlots($current),
             'employees'    => $this->employees($current),
             'loyalty'      => $this->loyalty($current),
+            'payment_methods' => $this->paymentMethods($current),
             'forecast'     => $this->forecast($monthly, $now),
         ];
     }
@@ -103,7 +104,7 @@ class ManagerActivityStatsService
                     'name'           => $group->first()->service?->name ?? 'Prestation supprimée',
                     'count'          => $count,
                     'share'          => $total > 0 ? round($count / $total * 100, 1) : 0.0,
-                    'revenue'        => round((float) $group->sum('price'), 2),
+                    'revenue'        => round((float) $this->revenue($group), 2),
                     'previous_count' => $previousCount,
                     'trend'          => $this->trend($count, $previousCount),
                 ];
@@ -141,7 +142,7 @@ class ManagerActivityStatsService
             $months[] = [
                 'month'      => $key,
                 'total'      => $group->count(),
-                'revenue'    => round((float) $group->sum('price'), 2),
+                'revenue'    => round((float) $this->revenue($group), 2),
                 'by_service' => $byService,
                 'is_partial' => $key === $now->format('Y-m'),
             ];
@@ -200,7 +201,7 @@ class ManagerActivityStatsService
                 'employee_id' => (int) $employeeId,
                 'name'        => $group->first()->employee?->name ?? 'Employé retiré',
                 'count'       => $group->count(),
-                'revenue'     => round((float) $group->sum('price'), 2),
+                'revenue'     => round((float) $this->revenue($group), 2),
             ])
             ->sortByDesc('count')
             ->values()
@@ -277,6 +278,39 @@ class ManagerActivityStatsService
             'months_of_history' => count($active),
             'peak_month' => $peak && $peak['total'] > 0 ? ['month' => $peak['month'], 'total' => $peak['total']] : null,
         ];
+    }
+
+    /**
+     * @param  Collection<int, Appointment>  $appointments
+     */
+    private function revenue(Collection $appointments): float
+    {
+        return (float) $appointments->sum(fn (Appointment $a) => $a->collectedAmount());
+    }
+
+    /**
+     * Répartition des encaissements par moyen de paiement (espèces, Wave, Orange Money).
+     *
+     * @param  Collection<int, Appointment>  $current
+     * @return list<array<string, mixed>>
+     */
+    private function paymentMethods(Collection $current): array
+    {
+        $total = $this->revenue($current);
+
+        return collect(Appointment::PAYMENT_METHODS)
+            ->map(function (string $method) use ($current, $total) {
+                $group = $current->where('payment_method', $method);
+                $amount = $this->revenue($group);
+
+                return [
+                    'method' => $method,
+                    'count'  => $group->count(),
+                    'amount' => round($amount, 2),
+                    'share'  => $total > 0 ? round($amount / $total * 100, 1) : 0.0,
+                ];
+            })
+            ->all();
     }
 
     private function trend(int $current, int $previous): ?float
