@@ -79,6 +79,21 @@ class Appointment extends Model
     /** Moyens de paiement utilisés sur place. */
     const PAYMENT_METHODS = ['especes', 'wave', 'orange_money'];
 
+    // Un client peut annuler lui-même un rendez-vous confirmé jusqu'à 24 h avant.
+    // Une demande encore en attente reste annulable à tout moment : le salon ne
+    // s'est pas encore engagé. Passé ce délai, le client contacte le salon.
+    const CLIENT_CANCELLATION_HOURS = 24;
+
+    public function clientCanCancel(): bool
+    {
+        if ($this->status === 'pending') {
+            return true;
+        }
+
+        return $this->status === 'confirmed'
+            && $this->scheduled_at->greaterThan(now()->addHours(self::CLIENT_CANCELLATION_HOURS));
+    }
+
     public function canTransitionTo(string $newStatus): bool
     {
         return in_array($newStatus, self::ALLOWED_TRANSITIONS[$this->status] ?? [], true);

@@ -145,11 +145,18 @@ class AppointmentController extends Controller
 
         $appointment = DB::transaction(function () use ($appointment, $user, $nouveauStatut) {
             $locked = Appointment::lockForUpdate()->findOrFail($appointment->id);
-            if (!Gate::forUser($user)->allows('manage', $locked)) {
+            $isSalonSide = Gate::forUser($user)->allows('manage', $locked);
+            if (!$isSalonSide) {
                 abort_unless($locked->client_id === $user->id && $nouveauStatut === 'cancelled', 403);
             }
             if (!$locked->canTransitionTo($nouveauStatut)) {
                 throw ValidationException::withMessages(['status' => ['Transition invalide.']]);
+            }
+            if (!$isSalonSide && !$locked->clientCanCancel()) {
+                throw ValidationException::withMessages(['status' => [
+                    'Ce rendez-vous commence dans moins de '.Appointment::CLIENT_CANCELLATION_HOURS
+                    .' h : contactez directement le salon pour l\'annuler.',
+                ]]);
             }
             $locked->update(['status' => $nouveauStatut]);
             return $locked;
