@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Appointment;
+use App\Services\ManagerActivityStatsService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -42,5 +43,18 @@ class ManagerController extends Controller
                 'outstanding' => $generated - $collected,
             ],
         ]);
+    }
+
+    // GET /manager/stats/activity?period=month|quarter|year
+    // Les salons sont toujours ceux du gérant connecté : aucun identifiant de salon n'est accepté.
+    public function activity(Request $request, ManagerActivityStatsService $stats): JsonResponse
+    {
+        $validated = $request->validate([
+            'period' => 'sometimes|string|in:'.implode(',', array_keys(ManagerActivityStatsService::PERIODS)),
+        ]);
+
+        $salonIds = $request->user()->salons()->pluck('id');
+
+        return response()->json($stats->build($salonIds, $validated['period'] ?? 'month'));
     }
 }

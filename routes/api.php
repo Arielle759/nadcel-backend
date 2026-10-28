@@ -74,6 +74,7 @@ Route::middleware('auth:api')->group(function () {
     Route::middleware('role:gerant')->prefix('manager')->group(function () {
         Route::get('salons', [Api\ManagerController::class, 'salons']);
         Route::get('stats', [Api\ManagerController::class, 'stats']);
+        Route::get('stats/activity', [Api\ManagerController::class, 'activity'])->middleware('throttle:30,1');
     });
 
     Route::middleware('role:admin')->prefix('admin')->group(function () {
