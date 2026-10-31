@@ -28,6 +28,10 @@ Route::post('/auth/login', function (Request $request) {
     ]);
 })->middleware('throttle:5,1');
 
+// Mot de passe oublié : lien par e-mail, valable 60 minutes, usage unique.
+Route::post('/auth/forgot-password', [Api\PasswordResetController::class, 'forgot'])->middleware('throttle:5,1');
+Route::post('/auth/reset-password', [Api\PasswordResetController::class, 'reset'])->middleware('throttle:10,1');
+
 Route::post('/auth/register', function (Request $request) {
     $validated = $request->validate([
         'name'     => 'required|string|max:255',
