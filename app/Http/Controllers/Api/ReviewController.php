@@ -9,13 +9,23 @@ use App\Http\Controllers\Controller;
 
 class ReviewController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         if (!auth()->user()->hasRole('admin')) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $reviews = Review::with('client', 'salon', 'appointment')->paginate(10);
+        $validated = $request->validate([
+            'max_rating' => 'sometimes|integer|min:1|max:5',
+            'per_page'   => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        // Les plus récents d'abord : c'est l'ordre utile pour modérer.
+        $reviews = Review::with('client:id,name', 'salon:id,name')
+            ->when($validated['max_rating'] ?? null, fn ($q, $max) => $q->where('rating', '<=', $max))
+            ->latest()
+            ->paginate($validated['per_page'] ?? 30);
+
         return response()->json($reviews);
     }
 
