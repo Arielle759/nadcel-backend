@@ -49,7 +49,7 @@ class ManagerActivityStatsService
             ->where('status', 'completed')
             ->whereBetween('scheduled_at', [$loadFrom, $end])
             ->with(['service:id,name', 'employee:id,name'])
-            ->get(['id', 'client_id', 'service_id', 'employee_id', 'scheduled_at', 'price', 'amount_paid', 'payment_method']);
+            ->get(['id', 'client_id', 'client_phone', 'source', 'service_id', 'employee_id', 'scheduled_at', 'price', 'amount_paid', 'payment_method']);
 
         $current = $appointments->filter(fn (Appointment $a) => $a->scheduled_at->between($start, $end));
         $previous = $appointments->filter(
@@ -79,6 +79,7 @@ class ManagerActivityStatsService
             'employees'    => $this->employees($current),
             'loyalty'      => $this->loyalty($current),
             'payment_methods' => $this->paymentMethods($current),
+            'sources'      => $this->sources($current),
             'forecast'     => $this->forecast($monthly, $now),
         ];
     }
@@ -214,7 +215,14 @@ class ManagerActivityStatsService
      */
     private function loyalty(Collection $current): array
     {
-        $visitsByClient = $current->whereNotNull('client_id')->countBy('client_id');
+        // Une cliente est reconnue par son compte, ou à défaut par son téléphone
+        // quand le rendez-vous a été saisi par le salon.
+        $visitsByClient = $current
+            ->map(fn (Appointment $a) => $a->client_id
+                ? 'u'.$a->client_id
+                : ($a->client_phone ? 'p'.preg_replace('/\D+/', '', $a->client_phone) : null))
+            ->filter()
+            ->countBy();
         $clients = $visitsByClient->count();
         $returning = $visitsByClient->filter(fn (int $visits) => $visits >= 2)->count();
 
@@ -223,6 +231,30 @@ class ManagerActivityStatsService
             'returning' => $returning,
             'rate'      => $clients > 0 ? round($returning / $clients * 100, 1) : 0.0,
         ];
+    }
+
+    /**
+     * Répartition des prestations réalisées par canal de réservation.
+     *
+     * @param  Collection<int, Appointment>  $current
+     * @return list<array{source: string, count: int, share: float}>
+     */
+    private function sources(Collection $current): array
+    {
+        $total = $current->count();
+
+        return collect(Appointment::SOURCES)
+            ->map(function (string $source) use ($current, $total) {
+                $count = $current->where('source', $source)->count();
+                return [
+                    'source' => $source,
+                    'count'  => $count,
+                    'share'  => $total > 0 ? round($count / $total * 100, 1) : 0.0,
+                ];
+            })
+            ->filter(fn (array $row) => $row['count'] > 0)
+            ->values()
+            ->all();
     }
 
     /**

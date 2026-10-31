@@ -61,6 +61,9 @@ class Appointment extends Model
 
     protected $fillable = [
         'client_id',
+        'client_name',
+        'client_phone',
+        'source',
         'salon_id',
         'service_id',
         'employee_id',
@@ -78,6 +81,16 @@ class Appointment extends Model
 
     /** Moyens de paiement utilisés sur place. */
     const PAYMENT_METHODS = ['especes', 'wave', 'orange_money'];
+
+    // Canal de réservation : en ligne par la cliente, ou saisi par le salon.
+    const SOURCES = ['online', 'whatsapp', 'phone', 'walk_in'];
+    const OFFLINE_SOURCES = ['whatsapp', 'phone', 'walk_in'];
+
+    /** Nom à afficher : celui du compte client, sinon celui saisi par le salon. */
+    public function clientDisplayName(): string
+    {
+        return $this->client?->name ?? $this->client_name ?? 'Client';
+    }
 
     // Un client peut annuler lui-même un rendez-vous confirmé jusqu'à 24 h avant.
     // Une demande encore en attente reste annulable à tout moment : le salon ne

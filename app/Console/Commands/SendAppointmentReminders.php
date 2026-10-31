@@ -21,6 +21,8 @@ class SendAppointmentReminders extends Command
 
         $appointments = Appointment::where('status', 'confirmed')
             ->whereNull('reminder_sent_at')
+            // Les rendez-vous saisis par le salon sans compte n'ont pas d'e-mail.
+            ->whereNotNull('client_id')
             ->whereBetween('scheduled_at', [$from, $to])
             ->with('client', 'salon', 'service')
             ->get();

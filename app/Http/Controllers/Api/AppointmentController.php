@@ -61,34 +61,93 @@ class AppointmentController extends Controller
             'scheduled_at' => 'required|date|after:now',
         ]);
 
+        $appointment = $this->bookSlot($validated, [
+            'client_id' => Auth::id(),
+            'status'    => 'pending',
+            'source'    => 'online',
+        ]);
+
+        if (!$appointment) {
+            return response()->json(['error' => 'Aucun employé disponible pour ce créneau.'], 409);
+        }
+
+        $appointment->load('client', 'salon', 'service');
+        Mail::to($appointment->client->email)->send(new AppointmentCreated($appointment));
+
+        return response()->json($appointment->load('employee'), 201);
+    }
+
+    // POST /manager/appointments
+    // Rendez-vous pris hors de NADCEL (WhatsApp, téléphone, sur place) et saisi par
+    // le gérant : mêmes contrôles de créneau que la réservation en ligne, la cliente
+    // n'a pas besoin de compte, le rendez-vous est confirmé d'emblée.
+    public function storeOffline(Request $request)
+    {
+        $validated = $request->validate([
+            'salon_id'     => 'required|exists:salons,id',
+            'service_id'   => 'required|exists:services,id',
+            'employee_id'  => 'nullable|integer|exists:employees,id',
+            'scheduled_at' => 'required|date|after:now',
+            'client_name'  => 'required|string|max:120',
+            'client_phone' => ['required', 'string', 'max:30', 'regex:/^[0-9+ ().-]{7,30}$/'],
+            'source'       => 'required|string|in:'.implode(',', Appointment::OFFLINE_SOURCES),
+            'notes'        => 'nullable|string|max:500',
+        ]);
+
+        $this->authorize('manageServices', Salon::findOrFail($validated['salon_id']));
+
+        $appointment = $this->bookSlot($validated, [
+            'client_id'    => null,
+            'client_name'  => trim($validated['client_name']),
+            'client_phone' => trim($validated['client_phone']),
+            'source'       => $validated['source'],
+            'notes'        => $validated['notes'] ?? null,
+            'status'       => 'confirmed',
+        ]);
+
+        if (!$appointment) {
+            return response()->json(['error' => 'Aucun membre de l\'équipe n\'est libre sur ce créneau.'], 409);
+        }
+
+        return response()->json($appointment->load('salon', 'service', 'employee:id,salon_id,name'), 201);
+    }
+
+    /**
+     * Réserve un créneau de façon sûre (verrous, horaires, employé compétent et libre)
+     * et crée le rendez-vous avec les attributs propres au canal de réservation.
+     * Retourne null si aucun employé n'est disponible.
+     */
+    private function bookSlot(array $validated, array $attributes): ?Appointment
+    {
         $scheduledAt = \Illuminate\Support\Carbon::parse($validated['scheduled_at'])
             ->setTimezone(config('app.timezone'));
-        $appointment = DB::transaction(function () use ($validated, $scheduledAt) {
-        $salon = Salon::lockForUpdate()->findOrFail($validated['salon_id']);
-        $service = Service::lockForUpdate()->findOrFail($validated['service_id']);
 
-        if ($service->salon_id !== $salon->id) {
-            throw ValidationException::withMessages([
-                'service_id' => ['Le service sélectionné n’appartient pas à ce salon.'],
-            ]);
-        }
+        return DB::transaction(function () use ($validated, $scheduledAt, $attributes) {
+            $salon = Salon::lockForUpdate()->findOrFail($validated['salon_id']);
+            $service = Service::lockForUpdate()->findOrFail($validated['service_id']);
 
-        abort_unless($salon->is_active && $salon->is_verified && $service->is_active, 404);
+            if ($service->salon_id !== $salon->id) {
+                throw ValidationException::withMessages([
+                    'service_id' => ['Le service sélectionné n’appartient pas à ce salon.'],
+                ]);
+            }
 
-        if (isset($validated['employee_id']) && !$service->employees()
-            ->where('employees.salon_id', $salon->id)->where('employees.id', $validated['employee_id'])->exists()) {
-            throw ValidationException::withMessages([
-                'employee_id' => ['Cet employé ne réalise pas ce service dans ce salon.'],
-            ]);
-        }
+            abort_unless($salon->is_active && $salon->is_verified && $service->is_active, 404);
 
-        $hours = $salon->openingHoursFor($scheduledAt);
-        $appointmentEnd = $scheduledAt->copy()->addMinutes($service->duration);
-        if (!$hours || $scheduledAt->lt($hours['open']) || $appointmentEnd->gt($hours['close'])) {
-            throw ValidationException::withMessages([
-                'scheduled_at' => ['Ce créneau est en dehors des horaires d’ouverture du salon.'],
-            ]);
-        }
+            if (isset($validated['employee_id']) && !$service->employees()
+                ->where('employees.salon_id', $salon->id)->where('employees.id', $validated['employee_id'])->exists()) {
+                throw ValidationException::withMessages([
+                    'employee_id' => ['Cet employé ne réalise pas ce service dans ce salon.'],
+                ]);
+            }
+
+            $hours = $salon->openingHoursFor($scheduledAt);
+            $appointmentEnd = $scheduledAt->copy()->addMinutes($service->duration);
+            if (!$hours || $scheduledAt->lt($hours['open']) || $appointmentEnd->gt($hours['close'])) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => ['Ce créneau est en dehors des horaires d’ouverture du salon.'],
+                ]);
+            }
 
             // Sérialise le choix d'un employé pour éviter une double réservation
             // lorsque deux requêtes arrivent exactement au même moment.
@@ -106,25 +165,15 @@ class AppointmentController extends Controller
             }
 
             return Appointment::create([
-                'client_id' => Auth::id(),
-                'salon_id' => $salon->id,
-                'service_id' => $service->id,
-                'employee_id' => $employee->id,
+                ...$attributes,
+                'salon_id'     => $salon->id,
+                'service_id'   => $service->id,
+                'employee_id'  => $employee->id,
                 'scheduled_at' => $scheduledAt,
-                'duration' => $service->duration,
-                'price' => $service->price,
-                'status' => 'pending',
+                'duration'     => $service->duration,
+                'price'        => $service->price,
             ]);
         }, attempts: 3);
-
-        if (!$appointment) {
-            return response()->json(['error' => 'Aucun employé disponible pour ce créneau.'], 409);
-        }
-
-        $appointment->load('client', 'salon', 'service');
-        Mail::to($appointment->client->email)->send(new AppointmentCreated($appointment));
-
-        return response()->json($appointment->load('employee'), 201);
     }
 
     public function show(Request $request, Appointment $appointment)
@@ -162,6 +211,11 @@ class AppointmentController extends Controller
             return $locked;
         }, attempts: 3);
         $appointment->load('client', 'salon.manager', 'service');
+
+        // Rendez-vous saisi par le salon sans compte client : pas d'e-mail possible.
+        if (!$appointment->client) {
+            return response()->json($appointment->load('employee'));
+        }
 
         if ($nouveauStatut === 'confirmed') {
             Mail::to($appointment->client->email)->send(new AppointmentConfirmed($appointment));

@@ -81,6 +81,8 @@ Route::middleware('auth:api')->group(function () {
         Route::get('salons', [Api\ManagerController::class, 'salons']);
         Route::get('stats', [Api\ManagerController::class, 'stats']);
         Route::get('stats/activity', [Api\ManagerController::class, 'activity'])->middleware('throttle:30,1');
+        // Rendez-vous pris par WhatsApp, téléphone ou sur place, saisi par le gérant.
+        Route::post('appointments', [Api\AppointmentController::class, 'storeOffline'])->middleware('throttle:60,1');
     });
 
     Route::middleware('role:admin')->prefix('admin')->group(function () {
