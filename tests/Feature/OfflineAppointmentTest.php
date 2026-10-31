@@ -161,4 +161,40 @@ class OfflineAppointmentTest extends TestCase
         $this->assertSame(1, $sources['online']);
         $response->assertJsonPath('loyalty.clients', 2)->assertJsonPath('loyalty.returning', 1);
     }
+
+    public function test_manager_marks_the_whatsapp_reminder_as_sent_once(): void
+    {
+        $this->actingAs($this->manager, 'api')->postJson('/api/manager/appointments', $this->payload())->assertCreated();
+        $appointment = Appointment::firstOrFail();
+
+        $this->patchJson("/api/manager/appointments/{$appointment->id}/reminder")->assertOk();
+        $firstSentAt = $appointment->fresh()->reminder_sent_at;
+        $this->assertNotNull($firstSentAt);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-28 09:00:00'));
+        $this->patchJson("/api/manager/appointments/{$appointment->id}/reminder")->assertOk();
+        $this->assertTrue($appointment->fresh()->reminder_sent_at->equalTo($firstSentAt));
+    }
+
+    public function test_only_the_salon_manager_can_mark_a_reminder(): void
+    {
+        $this->actingAs($this->manager, 'api')->postJson('/api/manager/appointments', $this->payload())->assertCreated();
+        $appointment = Appointment::firstOrFail();
+
+        $other = User::factory()->create();
+        $other->assignRole('gerant');
+        $this->actingAs($other, 'api')
+            ->patchJson("/api/manager/appointments/{$appointment->id}/reminder")
+            ->assertForbidden();
+        $this->assertNull($appointment->fresh()->reminder_sent_at);
+    }
+
+    public function test_reminder_cannot_be_marked_on_a_cancelled_appointment(): void
+    {
+        $this->actingAs($this->manager, 'api')->postJson('/api/manager/appointments', $this->payload())->assertCreated();
+        $appointment = Appointment::firstOrFail();
+        $this->patchJson("/api/appointments/{$appointment->id}", ['status' => 'cancelled'])->assertOk();
+
+        $this->patchJson("/api/manager/appointments/{$appointment->id}/reminder")->assertUnprocessable();
+    }
 }

@@ -117,6 +117,7 @@ class Appointment extends Model
         'price' => 'decimal:2',
         'amount_paid' => 'decimal:2',
         'paid_at' => 'datetime',
+        'reminder_sent_at' => 'datetime',
     ];
 
     /** Montant réellement encaissé ; à défaut (anciens rendez-vous), le prix prévu. */

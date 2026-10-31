@@ -112,6 +112,26 @@ class AppointmentController extends Controller
         return response()->json($appointment->load('salon', 'service', 'employee:id,salon_id,name'), 201);
     }
 
+    // PATCH /manager/appointments/{id}/reminder
+    // Le gérant a envoyé le rappel par WhatsApp depuis son téléphone : on le note
+    // pour ne pas relancer la cliente deux fois. Idempotent.
+    public function markReminderSent(Appointment $appointment)
+    {
+        $this->authorize('pay', $appointment);
+
+        if (!in_array($appointment->status, ['pending', 'confirmed'], true)) {
+            throw ValidationException::withMessages([
+                'status' => ['Ce rendez-vous n\'est plus à venir.'],
+            ]);
+        }
+
+        if ($appointment->reminder_sent_at === null) {
+            $appointment->update(['reminder_sent_at' => now()]);
+        }
+
+        return response()->json($appointment->load('salon', 'service', 'employee:id,salon_id,name'));
+    }
+
     /**
      * Réserve un créneau de façon sûre (verrous, horaires, employé compétent et libre)
      * et crée le rendez-vous avec les attributs propres au canal de réservation.

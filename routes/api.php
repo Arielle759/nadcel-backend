@@ -87,6 +87,8 @@ Route::middleware('auth:api')->group(function () {
         Route::get('stats/activity', [Api\ManagerController::class, 'activity'])->middleware('throttle:30,1');
         // Rendez-vous pris par WhatsApp, téléphone ou sur place, saisi par le gérant.
         Route::post('appointments', [Api\AppointmentController::class, 'storeOffline'])->middleware('throttle:60,1');
+        // Rappel envoyé à la main par WhatsApp (cliente sans compte, donc sans e-mail).
+        Route::patch('appointments/{appointment}/reminder', [Api\AppointmentController::class, 'markReminderSent']);
     });
 
     Route::middleware('role:admin')->prefix('admin')->group(function () {
