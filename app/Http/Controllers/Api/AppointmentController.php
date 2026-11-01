@@ -11,6 +11,7 @@ use App\Models\Salon;
 use Illuminate\Support\Facades\Gate;
 use App\Services\AppointmentAvailabilityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -28,7 +29,11 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             // scope=salon : l'agenda du gérant, sans ses réservations personnelles de client.
             'scope'    => 'sometimes|string|in:salon',
-            'per_page' => 'sometimes|integer|min:1|max:100',
+            // Fenêtre de dates facultative : l'agenda et les rappels de demain
+            // ne dépendent plus des 100 derniers rendez-vous seulement.
+            'from'     => 'sometimes|date',
+            'to'       => 'sometimes|date|after_or_equal:from',
+            'per_page' => 'sometimes|integer|min:1|max:500',
         ]);
 
         $user = $request->user();
@@ -47,8 +52,16 @@ class AppointmentController extends Controller
             $query->where('client_id', $user->id);
         }
 
+        $windowed = isset($validated['from']) || isset($validated['to']);
+        if (isset($validated['from'])) {
+            $query->where('scheduled_at', '>=', Carbon::parse($validated['from']));
+        }
+        if (isset($validated['to'])) {
+            $query->where('scheduled_at', '<=', Carbon::parse($validated['to']));
+        }
+
         return response()->json(
-            $query->orderBy('scheduled_at', 'desc')->paginate($validated['per_page'] ?? 10)
+            $query->orderBy('scheduled_at', $windowed ? 'asc' : 'desc')->paginate($validated['per_page'] ?? 10)
         );
     }
 

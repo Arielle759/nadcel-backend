@@ -165,6 +165,6 @@ class AppointmentCompletionTest extends TestCase
         $this->assertTrue($ids->contains($salonAppointment->id));
         $this->assertFalse($ids->contains($personal->id));
 
-        $this->actingAs($this->manager, 'api')->getJson('/api/appointments?per_page=500')->assertUnprocessable();
+        $this->actingAs($this->manager, 'api')->getJson('/api/appointments?per_page=501')->assertUnprocessable();
     }
 }

@@ -197,4 +197,30 @@ class OfflineAppointmentTest extends TestCase
 
         $this->patchJson("/api/manager/appointments/{$appointment->id}/reminder")->assertUnprocessable();
     }
+
+    public function test_agenda_can_load_a_date_window_beyond_the_latest_hundred(): void
+    {
+        // 120 rendez-vous dans plusieurs semaines : sans fenêtre, ils masquent ceux de demain.
+        $base = ['salon_id' => $this->salon->id, 'service_id' => $this->service->id, 'status' => 'confirmed'];
+        Appointment::factory()->count(120)->create($base + ['scheduled_at' => '2026-12-15 10:00:00']);
+        $tomorrow = Appointment::factory()->create($base + [
+            'scheduled_at' => '2026-10-29 10:00:00', 'client_id' => null,
+            'client_name' => 'Awa', 'client_phone' => '771234567', 'source' => 'whatsapp',
+        ]);
+
+        $this->actingAs($this->manager, 'api')
+            ->getJson('/api/appointments?scope=salon&per_page=100')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $tomorrow->id, 'client_name' => 'Awa']);
+
+        $this->actingAs($this->manager, 'api')
+            ->getJson('/api/appointments?scope=salon&from=2026-10-29T00:00:00Z&to=2026-10-29T23:59:59Z')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.id', $tomorrow->id);
+
+        $this->actingAs($this->manager, 'api')
+            ->getJson('/api/appointments?scope=salon&from=2026-10-30&to=2026-10-29')
+            ->assertUnprocessable();
+    }
 }
