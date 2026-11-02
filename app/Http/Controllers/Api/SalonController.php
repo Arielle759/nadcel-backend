@@ -2,7 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Mail\PartnerRequestReceived;
+use App\Mail\PartnerRequestSubmitted;
 use App\Models\Salon;
+use App\Models\User;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -91,6 +95,14 @@ class SalonController extends Controller
             'manager_id' => Auth::id(),
             'slug'       => $slug,
         ]);
+
+        // Accusé de réception au demandeur, alerte aux administrateurs.
+        // Envoyés en file d'attente : la réponse n'attend pas le serveur mail.
+        Mail::to($user->email)->send(new PartnerRequestReceived($salon));
+        $admins = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->pluck('email');
+        if ($admins->isNotEmpty()) {
+            Mail::to($admins->all())->send(new PartnerRequestSubmitted($salon));
+        }
 
         return response()->json($salon, 201);
     }

@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Mail\PartnerRequestApproved;
+use App\Mail\PartnerRequestRejected;
 use App\Models\Appointment;
 use App\Models\Review;
 use App\Models\Salon;
 use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Carbon;
 
 class AdminController extends Controller
@@ -68,6 +71,9 @@ class AdminController extends Controller
         if ($manager && !$manager->hasRole('gerant')) {
             $manager->assignRole('gerant');
         }
+        if ($manager) {
+            Mail::to($manager->email)->send(new PartnerRequestApproved($salon));
+        }
 
         return response()->json($salon);
     }
@@ -80,6 +86,10 @@ class AdminController extends Controller
         }
 
         $salon->reject();
+
+        if ($salon->manager) {
+            Mail::to($salon->manager->email)->send(new PartnerRequestRejected($salon));
+        }
 
         return response()->json($salon);
     }

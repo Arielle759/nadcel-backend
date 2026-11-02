@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\PartnerRequestApproved;
+use App\Mail\PartnerRequestReceived;
+use App\Mail\PartnerRequestRejected;
+use App\Mail\PartnerRequestSubmitted;
 use App\Models\Salon;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -99,5 +104,47 @@ class PartnerRequestTest extends TestCase
         $this->assertCount(2, $statuses);
         $this->assertSame('pending', $statuses[$pending->id]);
         $this->assertSame('rejected', $statuses[$rejected->id]);
+    }
+
+    public function test_each_step_of_a_partner_request_sends_an_email(): void
+    {
+        Mail::fake();
+        $admin = User::factory()->create(['email' => 'admin@nadcel.test']);
+        $admin->assignRole('admin');
+        $requester = $this->client();
+
+        $salonId = $this->actingAs($requester, 'api')->postJson('/api/salons', $this->salonData)
+            ->assertCreated()->json('id');
+
+        Mail::assertQueued(PartnerRequestReceived::class, fn ($mail) => $mail->hasTo($requester->email));
+        Mail::assertQueued(PartnerRequestSubmitted::class, fn ($mail) => $mail->hasTo('admin@nadcel.test'));
+
+        $this->actingAs($admin, 'api')->patchJson("/api/admin/salons/{$salonId}/verify")->assertOk();
+        Mail::assertQueued(PartnerRequestApproved::class, fn ($mail) => $mail->hasTo($requester->email));
+        Mail::assertNotQueued(PartnerRequestRejected::class);
+    }
+
+    public function test_a_rejected_request_notifies_the_requester(): void
+    {
+        Mail::fake();
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $requester = $this->client();
+        $salonId = $this->actingAs($requester, 'api')->postJson('/api/salons', $this->salonData)->json('id');
+
+        $this->actingAs($admin, 'api')->patchJson("/api/admin/salons/{$salonId}/reject")->assertOk();
+
+        Mail::assertQueued(PartnerRequestRejected::class, fn ($mail) => $mail->hasTo($requester->email));
+        $this->assertFalse($requester->fresh()->hasRole('gerant'));
+    }
+
+    public function test_partner_emails_render_in_french(): void
+    {
+        $requester = $this->client();
+        $salon = Salon::factory()->for($requester, 'manager')->create(['name' => 'Salon Teranga', 'phone' => '771234567']);
+
+        $this->assertStringContainsString('48 heures', (new PartnerRequestReceived($salon))->render());
+        $this->assertStringContainsString('Salon Teranga est validé', (new PartnerRequestApproved($salon))->render());
+        $this->assertStringContainsString('771234567', (new PartnerRequestSubmitted($salon))->render());
     }
 }
