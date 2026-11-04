@@ -64,6 +64,7 @@ variable `RAILWAY_RUN_UID=0` (recommandation Railway pour les volumes).
 | `JWT_SECRET` | nouvelle clé : `php artisan jwt:secret --show` (en local) |
 | `APP_URL` | adresse du service, ex. `https://nadcel-api.up.railway.app` |
 | `FRONTEND_URL` | adresse Vercel, ex. `https://nadcel.vercel.app` |
+| `CORS_ALLOWED_ORIGINS` | facultatif : autres adresses autorisées à appeler l'API, séparées par des virgules (par défaut, seule `FRONTEND_URL`) |
 | `APP_LOCALE` | `fr` |
 | `DB_CONNECTION` | `pgsql` |
 | `DB_URL` | `${{Postgres.DATABASE_URL}}` |

@@ -74,6 +74,21 @@ class AppointmentController extends Controller
             'scheduled_at' => 'required|date|after:now',
         ]);
 
+        // Au plus MAX_PENDING_PER_SALON demandes en attente par cliente et par
+        // salon : une personne ne peut pas bloquer l'agenda d'un salon avec des
+        // réservations qu'elle n'honorera pas.
+        $pending = Appointment::where('client_id', Auth::id())
+            ->where('salon_id', $validated['salon_id'])
+            ->where('status', 'pending')
+            ->where('scheduled_at', '>', now())
+            ->count();
+        if ($pending >= Appointment::MAX_PENDING_PER_SALON) {
+            throw ValidationException::withMessages(['scheduled_at' => [
+                'Vous avez déjà '.Appointment::MAX_PENDING_PER_SALON.' demandes en attente dans ce salon. '
+                .'Attendez sa réponse ou annulez-en une avant d\'en faire une nouvelle.',
+            ]]);
+        }
+
         $appointment = $this->bookSlot($validated, [
             'client_id' => Auth::id(),
             'status'    => 'pending',

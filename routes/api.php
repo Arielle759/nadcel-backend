@@ -81,7 +81,11 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('salons', Api\SalonController::class)->except(['index', 'show', 'store']);
     Route::apiResource('services', Api\ServiceController::class)->except(['index', 'show']);
     Route::apiResource('employees', Api\EmployeeController::class);
-    Route::apiResource('appointments', Api\AppointmentController::class)->except(['destroy']);
+    // Réservation en ligne limitée : 10 par minute et par compte, contre le
+    // blocage volontaire de créneaux.
+    Route::apiResource('appointments', Api\AppointmentController::class)
+        ->except(['destroy'])
+        ->middlewareFor('store', 'throttle:10,1');
     Route::patch('appointments/{appointment}/pay', [Api\AppointmentController::class, 'pay']);
     Route::patch('appointments/{appointment}/complete', [Api\AppointmentController::class, 'complete']);
     Route::apiResource('reviews', Api\ReviewController::class);

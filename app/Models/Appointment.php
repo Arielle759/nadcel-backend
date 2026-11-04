@@ -97,6 +97,9 @@ class Appointment extends Model
     // s'est pas encore engagé. Passé ce délai, le client contacte le salon.
     const CLIENT_CANCELLATION_HOURS = 24;
 
+    // Demandes en ligne en attente autorisées par cliente et par salon.
+    const MAX_PENDING_PER_SALON = 3;
+
     public function clientCanCancel(): bool
     {
         if ($this->status === 'pending') {
