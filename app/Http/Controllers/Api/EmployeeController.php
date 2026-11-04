@@ -4,11 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Employee;
 use App\Models\Salon;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use App\Http\Controllers\Controller;
 
@@ -24,19 +21,21 @@ class EmployeeController extends Controller
         $this->authorize('manageEmployees', $salon);
 
         $employees = Employee::where('salon_id', $salon->id)
-            ->with('salon', 'user', 'services')
-            ->paginate(10);
+            ->with('salon', 'services')
+            ->orderBy('name')
+            ->paginate(100);
 
         return response()->json($employees);
     }
 
+    // Un membre de l'équipe n'a pas de compte : nom, téléphone et prestations
+    // réalisées suffisent au gérant et au calcul des disponibilités.
     public function store(Request $request)
     {
         $validated = $request->validate([
             'salon_id'   => 'required|exists:salons,id',
             'name'       => 'required|string|max:255',
-            'phone'      => 'required|string',
-            'email'      => 'required|email|unique:users,email',
+            'phone'      => 'required|string|max:30',
             'service_ids' => 'sometimes|array',
             'service_ids.*' => 'exists:services,id',
         ]);
@@ -46,15 +45,7 @@ class EmployeeController extends Controller
         $this->ensureServicesBelongToSalon($validated['service_ids'] ?? [], $salon);
 
         $employee = DB::transaction(function () use ($validated, $salon) {
-            $user = User::create([
-                'name'     => $validated['name'],
-                'email'    => $validated['email'],
-                'password' => Hash::make(Str::random(16)),
-            ]);
-            $user->assignRole('employee');
-
             $employee = Employee::create([
-                'user_id'  => $user->id,
                 'salon_id' => $salon->id,
                 'name'     => $validated['name'],
                 'phone'    => $validated['phone'],
@@ -67,14 +58,14 @@ class EmployeeController extends Controller
             return $employee;
         });
 
-        return response()->json($employee->load('user', 'services'), 201);
+        return response()->json($employee->load('services'), 201);
     }
 
     public function show(Employee $employee)
     {
         $this->authorize('manageEmployees', $employee->salon);
 
-        $employee->load('salon', 'user', 'services', 'appointments');
+        $employee->load('salon', 'services');
         return response()->json($employee);
     }
 
@@ -101,7 +92,7 @@ class EmployeeController extends Controller
             $employee->services()->sync($validated['service_ids']);
         }
 
-        return response()->json($employee->load('user', 'services'));
+        return response()->json($employee->load('services'));
     }
 
     public function destroy(Employee $employee)

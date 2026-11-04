@@ -231,6 +231,13 @@ class AppointmentController extends Controller
             if (!$isSalonSide) {
                 abort_unless($locked->client_id === $user->id && $nouveauStatut === 'cancelled', 403);
             }
+            // « Terminé » passe uniquement par la clôture (PATCH /complete) : elle
+            // exige que le rendez-vous ait commencé et enregistre le paiement.
+            if ($nouveauStatut === 'completed') {
+                throw ValidationException::withMessages(['status' => [
+                    'Pour terminer un rendez-vous, utilisez la clôture avec le montant encaissé.',
+                ]]);
+            }
             if (!$locked->canTransitionTo($nouveauStatut)) {
                 throw ValidationException::withMessages(['status' => ['Transition invalide.']]);
             }
@@ -294,9 +301,11 @@ class AppointmentController extends Controller
             $locked = Appointment::lockForUpdate()->findOrFail($appointment->id);
             $this->authorize('pay', $locked);
 
-            if (!$locked->canTransitionTo('completed')) {
+            // Une demande restée « en attente » dont la cliente est bien venue se
+            // clôture directement : inutile de la confirmer après coup.
+            if (!in_array($locked->status, ['pending', 'confirmed'], true)) {
                 throw ValidationException::withMessages([
-                    'status' => ['Seul un rendez-vous confirmé peut être clôturé.'],
+                    'status' => ['Ce rendez-vous est déjà terminé ou annulé.'],
                 ]);
             }
             if ($locked->scheduled_at->isFuture()) {

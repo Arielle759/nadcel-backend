@@ -60,17 +60,27 @@ class AppointmentStatusTransitionTest extends TestCase
         $this->assertEquals('confirmed', $appt->fresh()->status);
     }
 
-    public function test_confirmed_can_transition_to_completed(): void
+    // « Terminé » ne s'obtient que par la clôture (montant et moyen de paiement),
+    // jamais par un simple changement de statut.
+    public function test_completed_status_cannot_be_set_without_closing(): void
     {
         $appt = $this->makeAppointment('confirmed');
 
-        $response = $this->actingAs($this->manager, 'api')
-                         ->patchJson("/api/appointments/{$appt->id}", [
-                             'status' => 'completed',
-                         ]);
+        $this->actingAs($this->manager, 'api')
+            ->patchJson("/api/appointments/{$appt->id}", ['status' => 'completed'])
+            ->assertUnprocessable();
+        $this->assertEquals('confirmed', $appt->fresh()->status);
+    }
 
-        $response->assertStatus(200);
-        $this->assertEquals('completed', $appt->fresh()->status);
+    public function test_a_past_pending_request_can_be_closed_directly(): void
+    {
+        $appt = $this->makeAppointment('pending');
+        $appt->update(['scheduled_at' => now()->subHour()]);
+
+        $this->actingAs($this->manager, 'api')
+            ->patchJson("/api/appointments/{$appt->id}/complete", ['amount_paid' => 8000, 'payment_method' => 'wave'])
+            ->assertOk()
+            ->assertJsonPath('status', 'completed');
     }
 
     public function test_confirmed_can_transition_to_cancelled(): void

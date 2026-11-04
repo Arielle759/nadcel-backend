@@ -11,13 +11,15 @@ use Illuminate\Support\Facades\Mail;
 class SendAppointmentReminders extends Command
 {
     protected $signature   = 'appointments:send-reminders';
-    protected $description = 'Send reminder emails to clients with confirmed appointments in ~24h';
+    protected $description = 'Send reminder emails for confirmed appointments starting within 2h to 24h';
 
     public function handle(): int
     {
-        $target = now()->addHours(24);
-        $from   = $target->copy()->subMinutes(15);
-        $to     = $target->copy()->addMinutes(15);
+        // Rappel environ 24 h avant. Un rendez-vous réservé ou confirmé moins de
+        // 24 h à l'avance reçoit son rappel au passage suivant (toutes les 15 min),
+        // s'il reste au moins 2 h : sinon il serait inutile.
+        $from = now()->addHours(2);
+        $to   = now()->addHours(24)->addMinutes(15);
 
         $appointments = Appointment::where('status', 'confirmed')
             ->whereNull('reminder_sent_at')
