@@ -65,6 +65,8 @@ Route::get('/salons', [Api\SalonController::class, 'index']);
 Route::get('/salons/{salon}/availability', [Api\AvailabilityController::class, 'month'])->middleware('throttle:60,1');
 Route::get('/salons/{salon}/availability/{date}', [Api\AvailabilityController::class, 'day'])->middleware('throttle:60,1');
 Route::get('/salons/{salon}', [Api\SalonController::class, 'show']);
+// Avis mis en avant sur l'accueil (vrais avis uniquement, prénom et initiale).
+Route::get('/reviews/highlights', [Api\ReviewController::class, 'highlights'])->middleware('throttle:60,1');
 Route::get('/services', [Api\ServiceController::class, 'index']);
 Route::get('/services/{service}', [Api\ServiceController::class, 'show']);
 

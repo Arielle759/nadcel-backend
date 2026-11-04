@@ -29,6 +29,47 @@ class ReviewController extends Controller
         return response()->json($reviews);
     }
 
+    /**
+     * Avis mis en avant sur la page d'accueil (route publique).
+     * Uniquement de vrais avis, laissés après un rendez-vous terminé : 4 ou 5
+     * étoiles, avec un commentaire, sur un salon actif et vérifié.
+     * L'autrice est réduite au prénom et à l'initiale du nom (ni e-mail ni identifiant).
+     */
+    public function highlights()
+    {
+        $reviews = Review::with('client:id,name', 'salon:id,name')
+            ->where('rating', '>=', 4)
+            ->whereNotNull('comment')
+            ->whereRaw('LENGTH(TRIM(comment)) >= ?', [20])
+            ->whereHas('salon', fn ($q) => $q->where('is_active', true)->where('is_verified', true))
+            ->latest()
+            ->limit(8)
+            ->get()
+            ->map(fn (Review $review) => [
+                'id'         => $review->id,
+                'rating'     => $review->rating,
+                'comment'    => trim((string) $review->comment),
+                'author'     => self::shortName($review->client?->name),
+                'salon'      => ['id' => $review->salon->id, 'name' => $review->salon->name],
+                'created_at' => $review->created_at?->toIso8601String(),
+            ]);
+
+        return response()->json(['data' => $reviews]);
+    }
+
+    // « Awa Diop Ndiaye » devient « Awa D. »
+    private static function shortName(?string $name): string
+    {
+        $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($parts === []) {
+            return 'Une cliente';
+        }
+        $first = $parts[0];
+        $initial = isset($parts[1]) ? ' '.mb_strtoupper(mb_substr($parts[1], 0, 1)).'.' : '';
+
+        return $first.$initial;
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
