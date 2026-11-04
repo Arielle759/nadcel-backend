@@ -88,4 +88,23 @@ class IncidentHardeningTest extends TestCase
         $this->expectException(\RuntimeException::class);
         (new SalonSeeder)->run();
     }
+
+    public function test_create_admin_command_requires_a_strong_password_and_unique_email(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $this->artisan('admin:create', ['email' => 'admin@nadcel.sn', 'name' => 'Admin'])
+            ->expectsQuestion('Password (at least 16 characters)', 'faible')
+            ->expectsQuestion('Confirm password', 'faible')
+            ->assertFailed();
+        $this->assertDatabaseMissing('users', ['email' => 'admin@nadcel.sn']);
+
+        $this->artisan('admin:create', ['email' => 'admin@nadcel.sn', 'name' => 'Admin'])
+            ->expectsQuestion('Password (at least 16 characters)', 'Unique!Password234567')
+            ->expectsQuestion('Confirm password', 'Unique!Password234567')
+            ->assertSuccessful();
+        $this->assertTrue(User::where('email', 'admin@nadcel.sn')->firstOrFail()->hasRole('admin'));
+
+        $this->artisan('admin:create', ['email' => 'admin@nadcel.sn', 'name' => 'Autre'])->assertFailed();
+    }
 }

@@ -155,7 +155,7 @@ class SalonController extends Controller
             'city'        => 'sometimes|string',
             'phone'       => 'sometimes|string',
             'email'       => 'nullable|email',
-            'cover'       => 'nullable|image|max:2048',
+            'cover'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
             'opening_hours' => 'sometimes|nullable|array:mon,tue,wed,thu,fri,sat,sun',
             'opening_hours.*' => 'nullable|array:open,close',
             'opening_hours.*.open' => 'required_with:opening_hours.*.close|date_format:H:i',

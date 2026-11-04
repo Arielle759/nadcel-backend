@@ -40,7 +40,11 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => storage_path('app/public'),
+            // En production (Railway), PUBLIC_DISK_ROOT pointe vers un volume
+            // persistant monté dans public/storage : les photos survivent aux
+            // redéploiements et sont servies directement, sans lien symbolique.
+            // En local, rien ne change (storage/app/public + storage:link).
+            'root' => env('PUBLIC_DISK_ROOT', storage_path('app/public')),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
             'throw' => false,

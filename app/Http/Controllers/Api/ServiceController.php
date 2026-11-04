@@ -40,7 +40,7 @@ class ServiceController extends Controller
             'price'       => 'required|numeric|min:0',
             'duration'    => 'required|integer|min:15',
             'category'    => 'required|string',
-            'image'       => 'nullable|image|max:2048',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $salon = Salon::findOrFail($validated['salon_id']);
@@ -76,7 +76,7 @@ class ServiceController extends Controller
             'price'       => 'sometimes|numeric|min:0',
             'duration'    => 'sometimes|integer|min:15',
             'category'    => 'sometimes|string',
-            'image'       => 'nullable|image|max:2048',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         if ($request->hasFile('image')) {
