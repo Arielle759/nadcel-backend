@@ -14,11 +14,18 @@ class ServiceController extends Controller
     // GET /api/services - Lister tous les services (filtre optionnel ?salon_id=)
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        // employees_count : une prestation que personne ne réalise n'a aucun
+        // créneau. L'espace gérant le signale, la réservation l'explique.
         $services = Service::where('is_active', true)
             ->when($request->query('salon_id'), fn ($q, $salonId) => $q->where('salon_id', $salonId))
             ->whereIn('salon_id', Salon::visibleTo(Auth::user())->select('id'))
             ->with('salon')
-            ->paginate(10);
+            ->withCount('employees')
+            ->paginate($validated['per_page'] ?? 10);
 
         return response()->json($services);
     }

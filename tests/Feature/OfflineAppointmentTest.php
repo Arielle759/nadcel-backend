@@ -223,4 +223,18 @@ class OfflineAppointmentTest extends TestCase
             ->getJson('/api/appointments?scope=salon&from=2026-10-30&to=2026-10-29')
             ->assertUnprocessable();
     }
+
+    public function test_services_expose_how_many_team_members_perform_them(): void
+    {
+        $orphan = Service::factory()->for($this->salon)->create(['name' => 'Personne ne la fait']);
+
+        $services = collect($this->getJson("/api/salons/{$this->salon->id}")->assertOk()->json('services'))->keyBy('id');
+        $this->assertSame(1, $services[$this->service->id]['employees_count']);
+        $this->assertSame(0, $services[$orphan->id]['employees_count']);
+
+        $this->actingAs($this->manager, 'api')
+            ->getJson("/api/services?salon_id={$this->salon->id}&per_page=50")
+            ->assertOk()
+            ->assertJsonPath('per_page', 50);
+    }
 }

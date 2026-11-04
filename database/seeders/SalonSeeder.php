@@ -129,7 +129,7 @@ class SalonSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Manucure', 'category' => 'Manucure', 'price' => 6000, 'duration' => 40, 'image' => '/images/services/manucure.jpg',
+                'name' => 'Manucure', 'category' => 'Manucure', 'price' => 6000, 'duration' => 40, 'image' => '/images/services/manicure.jpg',
                 'descriptions' => [
                     'Soin complet des mains incluant limage, cuticules et pose de vernis pour des mains impeccables.',
                     'Manucure soignée avec gommage et hydratation pour des mains douces et des ongles parfaits.',
@@ -137,7 +137,7 @@ class SalonSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Pose Vernis Semi-Permanent', 'category' => 'Manucure', 'price' => 8000, 'duration' => 45, 'image' => '/images/services/manucure.jpg',
+                'name' => 'Pose Vernis Semi-Permanent', 'category' => 'Manucure', 'price' => 8000, 'duration' => 45, 'image' => '/images/services/manicure.jpg',
                 'descriptions' => [
                     'Pose de vernis semi-permanent longue durée pour des ongles parfaits jusqu\'à trois semaines.',
                     'Vernis semi-permanent résistant aux chocs et à l\'eau, pour un rendu impeccable durable.',

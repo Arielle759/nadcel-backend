@@ -73,6 +73,11 @@ Route::middleware('auth:api')->group(function () {
     // Demande de partenariat : limitée pour éviter les créations de salons en masse.
     Route::post('salons', [Api\SalonController::class, 'store'])->middleware('throttle:10,60');
     Route::get('my-salons', [Api\SalonController::class, 'mine']);
+
+    // Mon profil : nom, téléphone et mot de passe de l'utilisateur connecté.
+    Route::get('profile', [Api\ProfileController::class, 'show']);
+    Route::patch('profile', [Api\ProfileController::class, 'update'])->middleware('throttle:20,1');
+    Route::put('profile/password', [Api\ProfileController::class, 'updatePassword'])->middleware('throttle:5,1');
     Route::apiResource('salons', Api\SalonController::class)->except(['index', 'show', 'store']);
     Route::apiResource('services', Api\ServiceController::class)->except(['index', 'show']);
     Route::apiResource('employees', Api\EmployeeController::class);
