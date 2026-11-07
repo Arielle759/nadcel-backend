@@ -202,4 +202,30 @@ class ManagerActivityStatsTest extends TestCase
     {
         $this->activity('decade')->assertUnprocessable();
     }
+
+    public function test_top_clients_rank_by_visits_then_amount_and_merge_offline_by_phone(): void
+    {
+        $fatou = User::factory()->create(['name' => 'Fatou Sow', 'phone' => '+221 77 111 22 33']);
+
+        // Fatou (compte) : 2 visites, 25 000 F.
+        $this->done($this->braids, '2026-10-05 10:00', ['client_id' => $fatou->id]);
+        $this->done($this->nails, '2026-10-12 10:00', ['client_id' => $fatou->id]);
+        // Awa (sans compte, saisie par le salon) : 2 visites, 40 000 F, numéro écrit de deux façons.
+        $offline = ['client_id' => null, 'client_name' => 'Awa Ndiaye', 'source' => 'whatsapp'];
+        $this->done($this->braids, '2026-10-08 10:00', $offline + ['client_phone' => '77 222 33 44']);
+        $this->done($this->braids, '2026-10-20 10:00', $offline + ['client_phone' => '772223344']);
+        // Une seule visite : derrière.
+        $this->done($this->nails, '2026-10-21 10:00', ['client_id' => null, 'client_name' => 'Binta', 'client_phone' => '78 000 00 00', 'source' => 'phone']);
+        // Hors période : ignorée.
+        $this->done($this->braids, '2026-08-01 10:00', ['client_id' => $fatou->id]);
+
+        $this->activity()->assertOk()
+            ->assertJsonCount(3, 'top_clients')
+            ->assertJsonPath('top_clients.0.name', 'Awa Ndiaye')
+            ->assertJsonPath('top_clients.0.visits', 2)
+            ->assertJsonPath('top_clients.0.has_account', false)
+            ->assertJsonPath('top_clients.1.name', 'Fatou Sow')
+            ->assertJsonPath('top_clients.1.phone', '+221 77 111 22 33')
+            ->assertJsonPath('top_clients.2.visits', 1);
+    }
 }

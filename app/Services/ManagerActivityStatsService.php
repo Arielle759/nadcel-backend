@@ -48,8 +48,8 @@ class ManagerActivityStatsService
             ->whereIn('salon_id', $salonIds)
             ->where('status', 'completed')
             ->whereBetween('scheduled_at', [$loadFrom, $end])
-            ->with(['service:id,name', 'employee:id,name'])
-            ->get(['id', 'client_id', 'client_phone', 'source', 'service_id', 'employee_id', 'scheduled_at', 'price', 'amount_paid', 'payment_method']);
+            ->with(['service:id,name', 'employee:id,name', 'client:id,name,phone'])
+            ->get(['id', 'client_id', 'client_name', 'client_phone', 'source', 'service_id', 'employee_id', 'scheduled_at', 'price', 'amount_paid', 'payment_method']);
 
         $current = $appointments->filter(fn (Appointment $a) => $a->scheduled_at->between($start, $end));
         $previous = $appointments->filter(
@@ -78,6 +78,7 @@ class ManagerActivityStatsService
             'busy_slots'   => $this->busySlots($current),
             'employees'    => $this->employees($current),
             'loyalty'      => $this->loyalty($current),
+            'top_clients'  => $this->topClients($current),
             'payment_methods' => $this->paymentMethods($current),
             'sources'      => $this->sources($current),
             'forecast'     => $this->forecast($monthly, $now),
@@ -231,6 +232,39 @@ class ManagerActivityStatsService
             'returning' => $returning,
             'rate'      => $clients > 0 ? round($returning / $clients * 100, 1) : 0.0,
         ];
+    }
+
+    /**
+     * Clientes les plus fidèles de la période (« cliente du mois » sur 30 jours,
+     * « de l'année » sur 12 mois) : nombre de visites, puis montant dépensé.
+     * Même identification que loyalty() : le compte, ou à défaut le téléphone.
+     *
+     * @param  Collection<int, Appointment>  $current
+     * @return list<array<string, mixed>>
+     */
+    private function topClients(Collection $current, int $limit = 5): array
+    {
+        return $current
+            ->groupBy(fn (Appointment $a) => $a->client_id
+                ? 'u'.$a->client_id
+                : ($a->client_phone ? 'p'.preg_replace('/\D+/', '', $a->client_phone) : ''))
+            ->forget('')
+            ->map(function (Collection $visits) {
+                $latest = $visits->sortByDesc('scheduled_at')->first();
+
+                return [
+                    'name'       => $latest->client?->name ?? $latest->client_name ?? 'Client',
+                    'phone'      => $latest->client?->phone ?? $latest->client_phone,
+                    'has_account' => $latest->client_id !== null,
+                    'visits'     => $visits->count(),
+                    'spent'      => round((float) $this->revenue($visits), 2),
+                    'last_visit' => $latest->scheduled_at->toIso8601String(),
+                ];
+            })
+            ->sort(fn (array $a, array $b) => [$b['visits'], $b['spent']] <=> [$a['visits'], $a['spent']])
+            ->take($limit)
+            ->values()
+            ->all();
     }
 
     /**
