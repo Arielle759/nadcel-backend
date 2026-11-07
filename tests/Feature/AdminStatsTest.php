@@ -108,7 +108,14 @@ class AdminStatsTest extends TestCase
         $this->actingAs($this->admin, 'api')->getJson('/api/admin/stats')
             ->assertOk()
             ->assertJsonPath('appointments.cancellation_rate', 25)
-            ->assertJsonPath('appointments.online_share', 50);
+            ->assertJsonPath('appointments.online_share', 50)
+            ->assertJsonPath('appointments.recent_total', 4)
+            ->assertJsonPath('appointments.sources', [
+                ['source' => 'online', 'count' => 2, 'share' => 50],
+                ['source' => 'whatsapp', 'count' => 1, 'share' => 25],
+                ['source' => 'phone', 'count' => 1, 'share' => 25],
+                ['source' => 'walk_in', 'count' => 0, 'share' => 0],
+            ]);
     }
 
     public function test_rates_are_null_without_activity(): void

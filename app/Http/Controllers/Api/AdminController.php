@@ -170,6 +170,14 @@ class AdminController extends Controller
         $recentCancelled = (clone $recent)->where('status', 'cancelled')->count();
         $recentOnline = (clone $recent)->where('source', 'online')->count();
 
+        // Détail par canal (en ligne, WhatsApp, téléphone, sur place), toujours dans le même ordre.
+        $bySource = (clone $recent)->selectRaw('source, COUNT(*) as total')->groupBy('source')->pluck('total', 'source');
+        $sources = array_map(fn (string $source) => [
+            'source' => $source,
+            'count'  => (int) ($bySource[$source] ?? 0),
+            'share'  => $recentTotal > 0 ? round(($bySource[$source] ?? 0) / $recentTotal * 100, 1) : 0,
+        ], Appointment::SOURCES);
+
         return response()->json([
             'salons' => $salons,
             'users'  => [
@@ -185,6 +193,8 @@ class AdminController extends Controller
                     : null,
                 'cancellation_rate'        => $recentTotal > 0 ? round($recentCancelled / $recentTotal * 100, 1) : null,
                 'online_share'             => $recentTotal > 0 ? round($recentOnline / $recentTotal * 100, 1) : null,
+                'sources'                  => $sources,
+                'recent_total'             => $recentTotal,
             ],
             'to_review' => [
                 'pending_salons' => $salons['pending'],
