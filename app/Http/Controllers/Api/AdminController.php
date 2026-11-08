@@ -123,22 +123,6 @@ class AdminController extends Controller
         return response()->json(['message' => $message], 422);
     }
 
-    // DELETE /admin/salons/{salon}
-    public function deleteSalon(Salon $salon)
-    {
-        $salon->delete();
-
-        return response()->noContent();
-    }
-
-    // DELETE /admin/reviews/{review}
-    public function deleteReview(Review $review)
-    {
-        $review->delete();
-
-        return response()->noContent();
-    }
-
     // GET /admin/stats
     // Santé de la plateforme. Aucun montant : les salons encaissent eux-mêmes,
     // sur place ; la plateforme n'a pas à centraliser leur chiffre d'affaires.

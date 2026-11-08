@@ -112,7 +112,7 @@ Route::middleware('auth:api')->group(function () {
         Route::patch('salons/{salon}/reject', [Api\AdminController::class, 'rejectSalon']);
         Route::patch('salons/{salon}/suspend', [Api\AdminController::class, 'suspendSalon']);
         Route::patch('salons/{salon}/reactivate', [Api\AdminController::class, 'reactivateSalon']);
-        Route::delete('salons/{salon}', [Api\AdminController::class, 'deleteSalon']);
-        Route::delete('reviews/{review}', [Api\AdminController::class, 'deleteReview']);
+        // Pas de suppression : un salon se suspend (ses données et son historique
+        // sont conservés) et un avis authentique n'est jamais retiré par la plateforme.
     });
 });

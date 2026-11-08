@@ -219,8 +219,6 @@ class SecurityRegressionTest extends TestCase
             Auth::forgetGuards();
             $this->withToken($token)->patchJson("/api/admin/salons/{$salon->id}/{$action}")->assertForbidden();
         }
-        Auth::forgetGuards();
-        $this->withToken($token)->deleteJson("/api/admin/salons/{$salon->id}")->assertForbidden();
         $this->assertDatabaseHas('salons', ['id' => $salon->id, 'deleted_at' => null, 'is_active' => true]);
     }
 
