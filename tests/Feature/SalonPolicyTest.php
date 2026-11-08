@@ -61,27 +61,53 @@ class SalonPolicyTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_manager_can_delete_own_salon(): void
+    public function test_manager_can_deactivate_and_reactivate_own_salon_without_deleting_it(): void
+    {
+        $manager = User::factory()->create();
+        $salon   = Salon::factory()->for($manager, 'manager')->verified()->create();
+
+        $this->actingAs($manager, 'api')->patchJson("/api/salons/{$salon->id}/deactivate")->assertOk();
+        $this->assertNotNull($salon->fresh()->deactivated_at);
+        $this->assertNotSoftDeleted('salons', ['id' => $salon->id]);
+
+        // Invisible du public, mais toujours accessible à son gérant.
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/api/salons')->assertJsonMissing(['id' => $salon->id]);
+        $this->getJson("/api/salons/{$salon->id}")->assertNotFound();
+        $this->actingAs($manager, 'api')->getJson("/api/salons/{$salon->id}")->assertOk();
+
+        $this->actingAs($manager, 'api')->patchJson("/api/salons/{$salon->id}/activate")->assertOk();
+        $this->assertNull($salon->fresh()->deactivated_at);
+    }
+
+    public function test_salons_cannot_be_deleted_through_the_api(): void
     {
         $manager = User::factory()->create();
         $salon   = Salon::factory()->for($manager, 'manager')->create();
 
-        $response = $this->actingAs($manager, 'api')
-                         ->deleteJson("/api/salons/{$salon->id}");
-
-        $response->assertStatus(204);
+        $this->actingAs($manager, 'api')->deleteJson("/api/salons/{$salon->id}")->assertStatus(405);
+        $this->assertNotSoftDeleted('salons', ['id' => $salon->id]);
     }
 
-    public function test_stranger_cannot_delete_salon(): void
+    public function test_stranger_cannot_deactivate_salon(): void
     {
         $manager  = User::factory()->create();
         $stranger = User::factory()->create();
-        $salon    = Salon::factory()->for($manager, 'manager')->create();
+        $salon    = Salon::factory()->for($manager, 'manager')->verified()->create();
 
-        $response = $this->actingAs($stranger, 'api')
-                         ->deleteJson("/api/salons/{$salon->id}");
+        $this->actingAs($stranger, 'api')->patchJson("/api/salons/{$salon->id}/deactivate")->assertForbidden();
+        $this->assertNull($salon->fresh()->deactivated_at);
+    }
 
-        $response->assertStatus(403);
+    public function test_manager_cannot_lift_an_admin_suspension(): void
+    {
+        $manager = User::factory()->create();
+        $salon   = Salon::factory()->for($manager, 'manager')->verified()->create();
+        $salon->suspend();
+
+        $this->actingAs($manager, 'api')->patchJson("/api/salons/{$salon->id}/activate")->assertOk();
+        $this->assertFalse($salon->fresh()->is_active);
+        $this->assertFalse($salon->fresh()->isPublic());
     }
 
     public function test_admin_can_verify_salon(): void

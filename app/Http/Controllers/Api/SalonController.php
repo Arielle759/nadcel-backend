@@ -23,8 +23,7 @@ class SalonController extends Controller
             'per_page' => 'sometimes|integer|min:1|max:50',
         ]);
 
-        $salons = Salon::where('is_active', true)
-            ->where('is_verified', true)
+        $salons = Salon::public()
             ->when($validated['q'] ?? null, function ($q, $term) {
                 $term = mb_strtolower($term);
                 $q->where(function ($inner) use ($term) {
@@ -113,12 +112,13 @@ class SalonController extends Controller
     {
         $salons = Salon::where('manager_id', $request->user()->id)
             ->orderByDesc('created_at')
-            ->get(['id', 'name', 'city', 'is_verified', 'is_active', 'created_at'])
+            ->get(['id', 'name', 'city', 'is_verified', 'is_active', 'deactivated_at', 'created_at'])
             ->map(fn (Salon $salon) => [
                 'id'         => $salon->id,
                 'name'       => $salon->name,
                 'city'       => $salon->city,
                 'status'     => match (true) {
+                    $salon->is_verified && $salon->is_active && $salon->deactivated_at !== null => 'deactivated',
                     $salon->is_verified && $salon->is_active => 'verified',
                     $salon->is_verified                      => 'suspended',
                     $salon->is_active                        => 'pending',
@@ -174,12 +174,24 @@ class SalonController extends Controller
     }
 
     // DELETE /api/salons/{id} - Supprimer un salon
-    public function destroy(Salon $salon)
+    // PATCH /api/salons/{id}/deactivate - Le gérant retire son salon de la
+    // plateforme. Rien n'est supprimé : rendez-vous, avis et prestations restent.
+    public function deactivate(Salon $salon)
     {
-        $this->authorize('delete', $salon);
+        $this->authorize('update', $salon);
+        $salon->deactivateByManager();
 
-        $salon->delete();
-        return response()->noContent();
+        return response()->json($salon);
+    }
+
+    // PATCH /api/salons/{id}/activate - Le gérant remet son salon en ligne
+    // (sans effet sur une suspension décidée par l'administrateur).
+    public function activate(Salon $salon)
+    {
+        $this->authorize('update', $salon);
+        $salon->activateByManager();
+
+        return response()->json($salon);
     }
 
     // PATCH /api/salons/{id}/verify - Vérifier un salon (admin uniquement)

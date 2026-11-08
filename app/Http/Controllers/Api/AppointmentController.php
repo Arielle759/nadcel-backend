@@ -180,7 +180,7 @@ class AppointmentController extends Controller
                 ]);
             }
 
-            abort_unless($salon->is_active && $salon->is_verified && $service->is_active, 404);
+            abort_unless($salon->isPublic() && $service->is_active, 404);
 
             if (isset($validated['employee_id']) && !$service->employees()
                 ->where('employees.salon_id', $salon->id)->where('employees.id', $validated['employee_id'])->exists()) {

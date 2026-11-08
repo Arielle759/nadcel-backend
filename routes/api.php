@@ -80,7 +80,10 @@ Route::middleware('auth:api')->group(function () {
     Route::get('profile', [Api\ProfileController::class, 'show']);
     Route::patch('profile', [Api\ProfileController::class, 'update'])->middleware('throttle:20,1');
     Route::put('profile/password', [Api\ProfileController::class, 'updatePassword'])->middleware('throttle:5,1');
-    Route::apiResource('salons', Api\SalonController::class)->except(['index', 'show', 'store']);
+    // Pas de suppression de salon : le gérant le désactive (données conservées).
+    Route::apiResource('salons', Api\SalonController::class)->except(['index', 'show', 'store', 'destroy']);
+    Route::patch('salons/{salon}/deactivate', [Api\SalonController::class, 'deactivate']);
+    Route::patch('salons/{salon}/activate', [Api\SalonController::class, 'activate']);
     Route::apiResource('services', Api\ServiceController::class)->except(['index', 'show']);
     Route::apiResource('employees', Api\EmployeeController::class);
     // Réservation en ligne limitée : 10 par minute et par compte, contre le

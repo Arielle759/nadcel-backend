@@ -29,7 +29,7 @@ class AdminController extends Controller
             ->withAvg('reviews', 'rating')
             ->when($validated['status'] ?? null, function ($query, string $status) {
                 match ($status) {
-                    'online'    => $query->where('is_verified', true)->where('is_active', true),
+                    'online'    => $query->public(),
                     'suspended' => $query->where('is_verified', true)->where('is_active', false),
                     'pending'   => $query->where('is_verified', false)->where('is_active', true),
                     'rejected'  => $query->where('is_verified', false)->where('is_active', false),
@@ -135,7 +135,7 @@ class AdminController extends Controller
         $last30 = $now->copy()->subDays(30);
 
         $salons = [
-            'online'    => Salon::where('is_verified', true)->where('is_active', true)->count(),
+            'online'    => Salon::public()->count(),
             'pending'   => Salon::where('is_verified', false)->where('is_active', true)->count(),
             'suspended' => Salon::where('is_verified', true)->where('is_active', false)->count(),
             'rejected'  => Salon::where('is_verified', false)->where('is_active', false)->count(),

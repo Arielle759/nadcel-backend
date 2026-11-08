@@ -41,7 +41,7 @@ class ReviewController extends Controller
             ->where('rating', '>=', 4)
             ->whereNotNull('comment')
             ->whereRaw('LENGTH(TRIM(comment)) >= ?', [20])
-            ->whereHas('salon', fn ($q) => $q->where('is_active', true)->where('is_verified', true))
+            ->whereHas('salon', fn ($q) => $q->public())
             ->latest()
             ->limit(8)
             ->get()

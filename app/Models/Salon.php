@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $cover
  * @property numeric $rating
  * @property bool $is_active
+ * @property \Illuminate\Support\Carbon|null $deactivated_at
  * @property bool $is_verified
  * @property \Illuminate\Support\Carbon|null $deleted_at
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -118,6 +119,31 @@ class Salon extends Model
         $this->save();
     }
 
+    // Le gérant retire lui-même son salon de la plateforme, sans rien supprimer.
+    public function deactivateByManager(): void
+    {
+        $this->deactivated_at = now();
+        $this->save();
+    }
+
+    public function activateByManager(): void
+    {
+        $this->deactivated_at = null;
+        $this->save();
+    }
+
+    // Visible du public : validé par l'admin, non suspendu, non désactivé par le gérant.
+    public function isPublic(): bool
+    {
+        return $this->is_active && $this->is_verified && $this->deactivated_at === null;
+    }
+
+    /** @param Builder<Salon> $query */
+    public function scopePublic(Builder $query): Builder
+    {
+        return $query->where('is_active', true)->where('is_verified', true)->whereNull('deactivated_at');
+    }
+
     // Relations
     public function manager(): BelongsTo
     {
@@ -160,7 +186,7 @@ class Salon extends Model
             return true;
         }
 
-        return $this->is_active && $this->is_verified;
+        return $this->isPublic();
     }
 
     /** @param Builder<Salon> $query */
@@ -171,7 +197,7 @@ class Salon extends Model
         }
 
         return $query->where(function (Builder $q) use ($user) {
-            $q->where('is_active', true)->where('is_verified', true);
+            $q->public();
             if ($user) {
                 $q->orWhere('manager_id', $user->id);
             }
