@@ -58,6 +58,11 @@ return [
             'transport' => 'brevo',
         ],
 
+        // API HTTPS de Mailjet (même raison).
+        'mailjet' => [
+            'transport' => 'mailjet',
+        ],
+
         'postmark' => [
             'transport' => 'postmark',
             // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),

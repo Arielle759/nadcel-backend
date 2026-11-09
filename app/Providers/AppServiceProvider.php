@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Mail\Transport\BrevoApiTransport;
+use App\Mail\Transport\MailjetApiTransport;
 use App\Models\Appointment;
 use App\Models\Salon;
 use App\Policies\AppointmentPolicy;
@@ -30,6 +31,10 @@ class AppServiceProvider extends ServiceProvider
             return $guard;
         });
         Mail::extend('brevo', fn (array $config) => new BrevoApiTransport((string) config('services.brevo.key')));
+        Mail::extend('mailjet', fn (array $config) => new MailjetApiTransport(
+            (string) config('services.mailjet.key'),
+            (string) config('services.mailjet.secret'),
+        ));
         Gate::policy(Salon::class, SalonPolicy::class);
         Gate::policy(Appointment::class, AppointmentPolicy::class);
     }

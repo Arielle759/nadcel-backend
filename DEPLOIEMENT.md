@@ -73,6 +73,7 @@ variable `RAILWAY_RUN_UID=0` (recommandation Railway pour les volumes).
 | `LOG_CHANNEL` | `stderr` |
 | `MAIL_MAILER` | `brevo` (API HTTPS de Brevo : l'offre Hobby de Railway bloque les ports SMTP sortants) |
 | `BREVO_API_KEY` | **clé API** Brevo (*SMTP & API → API Keys*), pas la clé SMTP |
+| *ou* `MAIL_MAILER` = `mailjet` | API HTTPS de Mailjet, avec `MAILJET_API_KEY` et `MAILJET_SECRET_KEY` (*Account Settings → API Key Management*) |
 | `MAIL_FROM_ADDRESS` | une adresse **vérifiée** comme expéditeur dans Brevo |
 | `MAIL_FROM_NAME` | `Nadcel` |
 
