@@ -71,11 +71,8 @@ variable `RAILWAY_RUN_UID=0` (recommandation Railway pour les volumes).
 | `PUBLIC_DISK_ROOT` | `/app/public/storage` |
 | `QUEUE_CONNECTION` | `sync` (pas de processus de file d'attente à payer) |
 | `LOG_CHANNEL` | `stderr` |
-| `MAIL_MAILER` | `smtp` |
-| `MAIL_HOST` | serveur SMTP indiqué par Brevo (`smtp-relay.brevo.com`) |
-| `MAIL_PORT` | `587` |
-| `MAIL_USERNAME` | identifiant SMTP Brevo (onglet *SMTP & API*) |
-| `MAIL_PASSWORD` | **clé SMTP** Brevo (pas une clé API) |
+| `MAIL_MAILER` | `brevo` (API HTTPS de Brevo : l'offre Hobby de Railway bloque les ports SMTP sortants) |
+| `BREVO_API_KEY` | **clé API** Brevo (*SMTP & API → API Keys*), pas la clé SMTP |
 | `MAIL_FROM_ADDRESS` | une adresse **vérifiée** comme expéditeur dans Brevo |
 | `MAIL_FROM_NAME` | `Nadcel` |
 

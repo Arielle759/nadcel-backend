@@ -53,6 +53,11 @@ return [
             'transport' => 'ses',
         ],
 
+        // API HTTPS de Brevo (les ports SMTP sont bloqués sur Railway Hobby).
+        'brevo' => [
+            'transport' => 'brevo',
+        ],
+
         'postmark' => [
             'transport' => 'postmark',
             // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
