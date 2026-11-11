@@ -57,6 +57,7 @@ class AppointmentAvailabilityService
     ): ?Employee {
         $employees = $service->employees()
             ->where('employees.salon_id', $salon->id)
+            ->where('employees.is_active', true)
             ->when($employeeId !== null, fn ($q) => $q->where('employees.id', $employeeId))
             ->orderBy('employees.id');
 

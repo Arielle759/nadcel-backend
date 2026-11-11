@@ -183,7 +183,7 @@ class AppointmentController extends Controller
             abort_unless($salon->isPublic() && $service->is_active, 404);
 
             if (isset($validated['employee_id']) && !$service->employees()
-                ->where('employees.salon_id', $salon->id)->where('employees.id', $validated['employee_id'])->exists()) {
+                ->where('employees.salon_id', $salon->id)->where('employees.is_active', true)->where('employees.id', $validated['employee_id'])->exists()) {
                 throw ValidationException::withMessages([
                     'employee_id' => ['Cet employé ne réalise pas ce service dans ce salon.'],
                 ]);

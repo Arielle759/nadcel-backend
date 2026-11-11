@@ -95,12 +95,35 @@ class EmployeeController extends Controller
         return response()->json($employee->load('services'));
     }
 
-    public function destroy(Employee $employee)
+    // Un employé n'est jamais supprimé : le désactiver le retire des créneaux
+    // proposés et des nouvelles réservations, sans toucher à son historique
+    // (rendez-vous passés, chiffre d'affaires, statistiques).
+    public function deactivate(Employee $employee)
     {
         $this->authorize('manageEmployees', $employee->salon);
 
-        $employee->delete();
-        return response()->noContent();
+        $employee->forceFill(['is_active' => false])->save();
+
+        $upcoming = $employee->appointments()
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('scheduled_at', '>', now())
+            ->count();
+
+        return response()->json([
+            'employee' => $employee->load('services'),
+            // Rendez-vous à venir déjà attribués : le gérant doit les déplacer
+            // ou prévenir les clients.
+            'upcoming_appointments' => $upcoming,
+        ]);
+    }
+
+    public function activate(Employee $employee)
+    {
+        $this->authorize('manageEmployees', $employee->salon);
+
+        $employee->forceFill(['is_active' => true])->save();
+
+        return response()->json(['employee' => $employee->load('services')]);
     }
 
     /**

@@ -138,7 +138,7 @@ class SalonController extends Controller
         }
 
         $salon->loadCount('reviews')->loadAvg('reviews', 'rating');
-        $salon->load(['manager:id,name', 'services' => fn ($q) => $q->where('is_active', true)->withCount('employees'), 'employees:id,salon_id,name']);
+        $salon->load(['manager:id,name', 'services' => fn ($q) => $q->where('is_active', true)->withCount(['employees' => fn ($e) => $e->where('employees.is_active', true)]), 'employees' => fn ($q) => $q->where('is_active', true)->select('id', 'salon_id', 'name')]);
         return response()->json($salon);
     }
 

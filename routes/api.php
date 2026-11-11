@@ -85,7 +85,9 @@ Route::middleware('auth:api')->group(function () {
     Route::patch('salons/{salon}/deactivate', [Api\SalonController::class, 'deactivate']);
     Route::patch('salons/{salon}/activate', [Api\SalonController::class, 'activate']);
     Route::apiResource('services', Api\ServiceController::class)->except(['index', 'show']);
-    Route::apiResource('employees', Api\EmployeeController::class);
+    Route::apiResource('employees', Api\EmployeeController::class)->except(['destroy']);
+    Route::patch('employees/{employee}/deactivate', [Api\EmployeeController::class, 'deactivate']);
+    Route::patch('employees/{employee}/activate', [Api\EmployeeController::class, 'activate']);
     // Réservation en ligne limitée : 10 par minute et par compte, contre le
     // blocage volontaire de créneaux.
     Route::apiResource('appointments', Api\AppointmentController::class)

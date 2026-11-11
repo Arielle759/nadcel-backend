@@ -46,7 +46,7 @@ class AvailabilityController extends Controller
             ->get(['employee_id', 'scheduled_at', 'duration']);
 
         // Une seule requête pour les employés compétents dans ce salon
-        $employees = $service->employees()->where('salon_id', $salon->id)->get();
+        $employees = $service->employees()->where('salon_id', $salon->id)->where('employees.is_active', true)->get();
 
         // Une seule requête pour les fermetures exceptionnelles du mois
         $closedDates = $salon->closures()
@@ -110,7 +110,7 @@ class AvailabilityController extends Controller
             ->whereDate('scheduled_at', $day->toDateString())
             ->get(['employee_id', 'scheduled_at', 'duration']);
 
-        $employees = $service->employees()->where('salon_id', $salon->id)->get();
+        $employees = $service->employees()->where('salon_id', $salon->id)->where('employees.is_active', true)->get();
 
         return response()->json(
             $this->availability->availableSlotsForDay(

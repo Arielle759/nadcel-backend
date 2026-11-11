@@ -24,7 +24,7 @@ class ServiceController extends Controller
             ->when($request->query('salon_id'), fn ($q, $salonId) => $q->where('salon_id', $salonId))
             ->whereIn('salon_id', Salon::visibleTo(Auth::user())->select('id'))
             ->with('salon')
-            ->withCount('employees')
+            ->withCount(['employees' => fn ($e) => $e->where('employees.is_active', true)])
             ->paginate($validated['per_page'] ?? 10);
 
         return response()->json($services);

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $salon_id
  * @property string $name
  * @property string $phone
+ * @property bool $is_active
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Appointment> $appointments
@@ -43,6 +44,16 @@ class Employee extends Model
         'name',
         'phone',
     ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    /** Employés qui peuvent encore recevoir des rendez-vous. */
+    public function scopeActive($query)
+    {
+        return $query->where('employees.is_active', true);
+    }
 
     // Relations
     public function user(): BelongsTo
