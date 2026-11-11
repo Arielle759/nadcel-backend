@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Appointment;
 use App\Models\Review;
+use App\Models\Salon;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
@@ -55,6 +56,40 @@ class ReviewController extends Controller
             ]);
 
         return response()->json(['data' => $reviews]);
+    }
+
+    /**
+     * Avis d'un salon, pour sa page publique (route publique).
+     * Tous les avis sont montrés, quelle que soit la note : la plateforme ne
+     * trie pas les avis à la place des clientes. Chaque avis vient d'un
+     * rendez-vous terminé ; l'autrice est réduite au prénom et à l'initiale.
+     */
+    public function forSalon(Request $request, Salon $salon)
+    {
+        if (!$salon->isPublic()) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'page' => 'sometimes|integer|min:1',
+        ]);
+
+        $page = Review::with('client:id,name', 'appointment:id,service_id', 'appointment.service:id,name')
+            ->where('salon_id', $salon->id)
+            ->latest()
+            ->latest('id')
+            ->paginate(10, ['*'], 'page', $validated['page'] ?? 1);
+
+        $page->getCollection()->transform(fn (Review $review) => [
+            'id'         => $review->id,
+            'rating'     => $review->rating,
+            'comment'    => $review->comment !== null && trim($review->comment) !== '' ? trim($review->comment) : null,
+            'author'     => self::shortName($review->client?->name),
+            'service'    => $review->appointment?->service?->name,
+            'created_at' => $review->created_at?->toIso8601String(),
+        ]);
+
+        return response()->json($page);
     }
 
     // « Awa Diop Ndiaye » devient « Awa D. »

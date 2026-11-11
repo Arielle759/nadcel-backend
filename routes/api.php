@@ -67,6 +67,8 @@ Route::get('/salons/{salon}/availability/{date}', [Api\AvailabilityController::c
 Route::get('/salons/{salon}', [Api\SalonController::class, 'show']);
 // Avis mis en avant sur l'accueil (vrais avis uniquement, prénom et initiale).
 Route::get('/reviews/highlights', [Api\ReviewController::class, 'highlights'])->middleware('throttle:60,1');
+// Avis d'un salon sur sa page publique (prénom et initiale uniquement).
+Route::get('/salons/{salon}/reviews', [Api\ReviewController::class, 'forSalon'])->middleware('throttle:60,1');
 Route::get('/services', [Api\ServiceController::class, 'index']);
 Route::get('/services/{service}', [Api\ServiceController::class, 'show']);
 
