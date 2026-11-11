@@ -103,7 +103,7 @@ class ManagerActivityStatsService
 
                 return [
                     'service_id'     => (int) $serviceId,
-                    'name'           => $group->first()->service?->name ?? 'Prestation supprimée',
+                    'name'           => $group->first()->service?->name ?? 'Service supprimé',
                     'count'          => $count,
                     'share'          => $total > 0 ? round($count / $total * 100, 1) : 0.0,
                     'revenue'        => round((float) $this->revenue($group), 2),
