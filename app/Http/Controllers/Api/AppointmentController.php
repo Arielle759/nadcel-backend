@@ -106,7 +106,7 @@ class AppointmentController extends Controller
     }
 
     // POST /manager/appointments
-    // Rendez-vous pris hors de NADCEL (WhatsApp, téléphone, sur place) et saisi par
+    // Rendez-vous pris hors de NADCEL (WhatsApp, Instagram, Facebook, TikTok, téléphone, sur place) et saisi par
     // le gérant : mêmes contrôles de créneau que la réservation en ligne, la cliente
     // n'a pas besoin de compte, le rendez-vous est confirmé d'emblée.
     public function storeOffline(Request $request)

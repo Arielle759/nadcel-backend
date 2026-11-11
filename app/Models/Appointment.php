@@ -82,9 +82,10 @@ class Appointment extends Model
     /** Moyens de paiement utilisés sur place. */
     const PAYMENT_METHODS = ['especes', 'wave', 'orange_money'];
 
-    // Canal de réservation : en ligne par la cliente, ou saisi par le salon.
-    const SOURCES = ['online', 'whatsapp', 'phone', 'walk_in'];
-    const OFFLINE_SOURCES = ['whatsapp', 'phone', 'walk_in'];
+    // Canal de réservation : en ligne par la cliente, ou saisi par le salon
+    // (message WhatsApp, Instagram, Facebook ou TikTok, appel, cliente venue au salon).
+    const SOURCES = ['online', 'whatsapp', 'instagram', 'facebook', 'tiktok', 'phone', 'walk_in'];
+    const OFFLINE_SOURCES = ['whatsapp', 'instagram', 'facebook', 'tiktok', 'phone', 'walk_in'];
 
     /** Nom à afficher : celui du compte client, sinon celui saisi par le salon. */
     public function clientDisplayName(): string

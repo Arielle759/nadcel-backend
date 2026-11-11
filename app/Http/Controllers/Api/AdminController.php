@@ -154,7 +154,7 @@ class AdminController extends Controller
         $recentCancelled = (clone $recent)->where('status', 'cancelled')->count();
         $recentOnline = (clone $recent)->where('source', 'online')->count();
 
-        // Détail par canal (en ligne, WhatsApp, téléphone, sur place), toujours dans le même ordre.
+        // Détail par canal (en ligne, réseaux, téléphone, sur place), toujours dans le même ordre.
         $bySource = (clone $recent)->selectRaw('source, COUNT(*) as total')->groupBy('source')->pluck('total', 'source');
         $sources = array_map(fn (string $source) => [
             'source' => $source,

@@ -113,6 +113,9 @@ class AdminStatsTest extends TestCase
             ->assertJsonPath('appointments.sources', [
                 ['source' => 'online', 'count' => 2, 'share' => 50],
                 ['source' => 'whatsapp', 'count' => 1, 'share' => 25],
+                ['source' => 'instagram', 'count' => 0, 'share' => 0],
+                ['source' => 'facebook', 'count' => 0, 'share' => 0],
+                ['source' => 'tiktok', 'count' => 0, 'share' => 0],
                 ['source' => 'phone', 'count' => 1, 'share' => 25],
                 ['source' => 'walk_in', 'count' => 0, 'share' => 0],
             ]);

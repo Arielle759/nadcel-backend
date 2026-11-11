@@ -57,6 +57,24 @@ class OfflineAppointmentTest extends TestCase
         ], $overrides);
     }
 
+    public function test_manager_records_bookings_received_on_social_networks(): void
+    {
+        foreach (['instagram', 'facebook', 'tiktok'] as $k => $source) {
+            $this->actingAs($this->manager, 'api')
+                ->postJson('/api/manager/appointments', $this->payload([
+                    'source'       => $source,
+                    'scheduled_at' => '2026-10-29 1'.($k + 1).':00:00',
+                ]))
+                ->assertCreated()
+                ->assertJsonPath('source', $source);
+        }
+
+        $this->actingAs($this->manager, 'api')
+            ->postJson('/api/manager/appointments', $this->payload(['source' => 'snapchat']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('source');
+    }
+
     public function test_manager_records_a_whatsapp_booking_without_client_account(): void
     {
         $this->actingAs($this->manager, 'api')
