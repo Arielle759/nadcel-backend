@@ -134,7 +134,7 @@ class AppointmentController extends Controller
         ]);
 
         if (!$appointment) {
-            return response()->json(['error' => 'Aucun membre de l\'équipe n\'est libre sur ce créneau.'], 409);
+            return response()->json(['error' => 'Aucun employé n\'est libre sur ce créneau.'], 409);
         }
 
         return response()->json($appointment->load('salon', 'service', 'employee:id,salon_id,name'), 201);
