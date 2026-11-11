@@ -76,6 +76,22 @@ class ServiceSecurityTest extends TestCase
         $response->assertStatus(201);
     }
 
+    public function test_long_services_are_accepted_up_to_twelve_hours(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('gerant');
+        $salon   = Salon::factory()->for($manager, 'manager')->create();
+        $payload = ['salon_id' => $salon->id, 'name' => 'Tresses longues', 'price' => 30000, 'category' => 'Coiffure'];
+
+        $this->actingAs($manager, 'api')->postJson('/api/services', $payload + ['duration' => 600])
+             ->assertStatus(201)
+             ->assertJsonPath('duration', 600);
+
+        $this->actingAs($manager, 'api')->postJson('/api/services', $payload + ['duration' => 780])
+             ->assertStatus(422)
+             ->assertJsonValidationErrors('duration');
+    }
+
     public function test_services_of_unverified_salon_are_hidden_from_public(): void
     {
         $manager = User::factory()->create();

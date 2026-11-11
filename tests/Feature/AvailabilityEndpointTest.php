@@ -82,6 +82,23 @@ class AvailabilityEndpointTest extends TestCase
         $this->assertNotContains('18:00', $slots); // le créneau légacy 9h-19h ne doit plus s'appliquer
     }
 
+    public function test_long_service_only_starts_early_enough_to_end_before_closing(): void
+    {
+        $tomorrow = Carbon::tomorrow();
+        $dayKey   = strtolower($tomorrow->format('D'));
+
+        // Tresses de 8 h dans un salon ouvert de 9 h à 19 h : départ au plus tard à 11 h.
+        [$salon, $service] = $this->makeStaffedSalon([
+            'opening_hours' => [$dayKey => ['open' => '09:00', 'close' => '19:00']],
+        ], 480);
+
+        $slots = $this->getJson(
+            "/api/salons/{$salon->id}/availability/{$tomorrow->toDateString()}?service_id={$service->id}"
+        )->assertOk()->json();
+
+        $this->assertSame(['09:00', '09:30', '10:00', '10:30', '11:00'], $slots);
+    }
+
     public function test_salon_closure_blocks_the_whole_day(): void
     {
         [$salon, $service] = $this->makeStaffedSalon();

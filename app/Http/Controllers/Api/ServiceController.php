@@ -38,7 +38,7 @@ class ServiceController extends Controller
             'name'        => 'required|string|max:255',
             'description' => 'nullable|string',
             'price'       => 'required|numeric|min:0',
-            'duration'    => 'required|integer|min:15',
+            'duration'    => 'required|integer|min:15|max:720',
             'category'    => 'required|string',
             'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
@@ -74,7 +74,7 @@ class ServiceController extends Controller
             'name'        => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'price'       => 'sometimes|numeric|min:0',
-            'duration'    => 'sometimes|integer|min:15',
+            'duration'    => 'sometimes|integer|min:15|max:720',
             'category'    => 'sometimes|string',
             'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
