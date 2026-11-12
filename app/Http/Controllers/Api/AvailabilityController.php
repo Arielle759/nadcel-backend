@@ -18,11 +18,20 @@ class AvailabilityController extends Controller
         private readonly AppointmentAvailabilityService $availability
     ) {}
 
+    // Durée de l'option demandée ; sans option choisie, la plus courte (le
+    // calendrier montre alors les jours où au moins l'option la plus courte passe).
+    private function durationFor(Service $service, ?int $optionId): int
+    {
+        $option = $optionId ? $service->options->firstWhere('id', $optionId) : null;
+        return (int) ($option?->duration ?? $service->duration);
+    }
+
     // GET /salons/{salon}/availability?service_id={id}&month={YYYY-MM}
     public function month(Request $request, Salon $salon): JsonResponse
     {
         $validated = $request->validate([
             'service_id' => 'required|exists:services,id',
+            'option_id'  => 'nullable|integer',
             'month'      => 'required|date_format:Y-m',
         ]);
 
@@ -31,6 +40,7 @@ class AvailabilityController extends Controller
         }
 
         $service    = Service::where('salon_id', $salon->id)->where('is_active', true)->findOrFail($validated['service_id']);
+        $duration   = $this->durationFor($service, $validated['option_id'] ?? null);
         $monthStart = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
         $monthEnd   = $monthStart->copy()->endOfMonth();
         $today      = Carbon::today();
@@ -67,7 +77,7 @@ class AvailabilityController extends Controller
                     $employees,
                     $hours['open'],
                     $hours['close'],
-                    $service->duration,
+                    $duration,
                     $appointments,
                     $current->isToday() ? $now : null,
                 );
@@ -84,6 +94,7 @@ class AvailabilityController extends Controller
     {
         $validated = $request->validate([
             'service_id' => 'required|exists:services,id',
+            'option_id'  => 'nullable|integer',
         ]);
 
         if (!$salon->isVisibleTo(Auth::user())) {
@@ -99,6 +110,7 @@ class AvailabilityController extends Controller
         }
 
         $service = Service::where('salon_id', $salon->id)->where('is_active', true)->findOrFail($validated['service_id']);
+        $duration = $this->durationFor($service, $validated['option_id'] ?? null);
 
         $hours = $salon->openingHoursFor($day);
         if ($hours === null) {
@@ -117,7 +129,7 @@ class AvailabilityController extends Controller
                 $employees,
                 $hours['open'],
                 $hours['close'],
-                $service->duration,
+                $duration,
                 $appointments,
                 $day->isToday() ? Carbon::now() : null,
             )

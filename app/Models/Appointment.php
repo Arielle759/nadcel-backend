@@ -66,6 +66,8 @@ class Appointment extends Model
         'source',
         'salon_id',
         'service_id',
+        'service_option_id',
+        'option_label',
         'employee_id',
         'scheduled_at',
         'duration',

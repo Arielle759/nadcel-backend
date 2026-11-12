@@ -52,9 +52,13 @@ class Service extends Model
         'price',
         'duration',
         'category',
+        'option_label',
         'image',
         'is_active',
     ];
+
+    // Les options (longueur, taille…) sont toujours renvoyées avec le service.
+    protected $with = ['options'];
 
     protected $casts = [
         'price' => 'decimal:2',
@@ -71,6 +75,35 @@ class Service extends Model
     public function employees(): BelongsToMany
     {
         return $this->belongsToMany(Employee::class, 'employee_service');
+    }
+
+    /** @return HasMany<ServiceOption, $this> */
+    public function options(): HasMany
+    {
+        return $this->hasMany(ServiceOption::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * Prix et durée d'un rendez-vous : ceux de l'option choisie si le service
+     * en a, sinon ceux du service. Lève une erreur si l'option est absente ou
+     * n'appartient pas à ce service.
+     *
+     * @return array{0: ?ServiceOption, 1: float, 2: int}
+     */
+    public function priceAndDurationFor(?int $optionId): array
+    {
+        if ($this->options->isEmpty()) {
+            return [null, (float) $this->price, (int) $this->duration];
+        }
+
+        $option = $optionId ? $this->options->firstWhere('id', $optionId) : null;
+        if (!$option) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'service_option_id' => [($this->option_label ?: 'Option') . ' : choisissez une option pour ce service.'],
+            ]);
+        }
+
+        return [$option, (float) $option->price, (int) $option->duration];
     }
 
     public function appointments(): HasMany

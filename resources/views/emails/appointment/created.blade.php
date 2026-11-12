@@ -4,7 +4,7 @@ Votre rendez-vous a bien été enregistré et est en attente de confirmation.
 
 --- Détails du rendez-vous ---
 Salon    : {{ $appointment->salon->name }}
-Service  : {{ $appointment->service->name }}
+Service  : {{ $appointment->service->name }}{{ $appointment->option_label ? ' ('.$appointment->option_label.')' : '' }}
 Date     : {{ $appointment->scheduled_at->translatedFormat('l d F Y à H:i') }}
 Durée    : {{ $appointment->duration }} min
 Prix     : {{ number_format($appointment->price, 0, ',', ' ') }} FCFA

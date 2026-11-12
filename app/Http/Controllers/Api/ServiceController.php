@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Service;
 use App\Models\Salon;
+use App\Models\ServiceOption;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -33,6 +35,7 @@ class ServiceController extends Controller
     // POST /api/services - Créer un service
     public function store(Request $request)
     {
+        self::decodeOptions($request);
         $validated = $request->validate([
             'salon_id'    => 'required|exists:salons,id',
             'name'        => 'required|string|max:255',
@@ -41,6 +44,7 @@ class ServiceController extends Controller
             'duration'    => 'required|integer|min:15|max:720',
             'category'    => 'required|string',
             'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            ...self::optionRules(),
         ]);
 
         $salon = Salon::findOrFail($validated['salon_id']);
@@ -50,8 +54,14 @@ class ServiceController extends Controller
             $validated['image'] = '/storage/' . Storage::disk('public')->putFile('services', $request->file('image'));
         }
 
-        $service = Service::create($validated);
-        return response()->json($service, 201);
+        $options = $validated['options'] ?? null;
+        unset($validated['options']);
+        $service = DB::transaction(function () use ($validated, $options) {
+            $service = Service::create($validated);
+            $this->syncOptions($service, $options);
+            return $service;
+        });
+        return response()->json($service->load('options'), 201);
     }
 
     // GET /api/services/{id} - Détails d'un service
@@ -69,6 +79,7 @@ class ServiceController extends Controller
     public function update(Request $request, Service $service)
     {
         $this->authorize('manageServices', $service->salon);
+        self::decodeOptions($request);
 
         $validated = $request->validate([
             'name'        => 'sometimes|string|max:255',
@@ -77,6 +88,7 @@ class ServiceController extends Controller
             'duration'    => 'sometimes|integer|min:15|max:720',
             'category'    => 'sometimes|string',
             'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            ...self::optionRules(),
         ]);
 
         if ($request->hasFile('image')) {
@@ -87,8 +99,67 @@ class ServiceController extends Controller
             $validated['image'] = '/storage/' . Storage::disk('public')->putFile('services', $request->file('image'));
         }
 
-        $service->update($validated);
-        return response()->json($service);
+        $options = array_key_exists('options', $validated) ? ($validated['options'] ?? []) : null;
+        unset($validated['options']);
+        DB::transaction(function () use ($service, $validated, $options) {
+            $service->update($validated);
+            $this->syncOptions($service, $options);
+        });
+        return response()->json($service->fresh()->load('options'));
+    }
+
+    // Le formulaire est envoyé en multipart (photo) : les options arrivent en JSON.
+    private static function decodeOptions(Request $request): void
+    {
+        if (is_string($request->input('options'))) {
+            $decoded = json_decode($request->input('options'), true);
+            $request->merge(['options' => is_array($decoded) ? $decoded : []]);
+        }
+    }
+
+    private static function optionRules(): array
+    {
+        return [
+            'option_label'       => 'nullable|string|max:40',
+            'options'            => 'sometimes|nullable|array|max:' . ServiceOption::MAX_PER_SERVICE,
+            'options.*.label'    => 'required|string|max:60|distinct',
+            'options.*.price'    => 'required|numeric|min:0',
+            'options.*.duration' => 'required|integer|min:15|max:720',
+        ];
+    }
+
+    /**
+     * Remplace les options du service (null = ne rien changer). Le prix et la
+     * durée du service deviennent ceux de l'option la moins chère et la plus
+     * courte (affichés « à partir de »). Les rendez-vous déjà pris gardent leur
+     * copie du libellé, du prix et de la durée.
+     */
+    private function syncOptions(Service $service, ?array $options): void
+    {
+        if ($options === null) {
+            return;
+        }
+
+        $service->options()->delete();
+        foreach (array_values($options) as $i => $option) {
+            $service->options()->create([
+                'label'    => trim($option['label']),
+                'price'    => $option['price'],
+                'duration' => $option['duration'],
+                'position' => $i,
+            ]);
+        }
+
+        if ($options) {
+            $service->update([
+                'price'        => min(array_column($options, 'price')),
+                'duration'     => min(array_column($options, 'duration')),
+                'option_label' => $service->option_label ?: 'Longueur',
+            ]);
+        } else {
+            $service->update(['option_label' => null]);
+        }
+        $service->unsetRelation('options');
     }
 
     // DELETE /api/services/{id} - Supprimer un service
