@@ -71,7 +71,13 @@ class AppointmentController extends Controller
             'salon_id' => 'required|exists:salons,id',
             'service_id' => 'required|exists:services,id',
             'employee_id' => 'nullable|integer|exists:employees,id',
-            'scheduled_at' => 'required|date|after:now',
+            'scheduled_at' => [
+                'required', 'date', 'after:now',
+                'before_or_equal:'.now()->addDays(Appointment::MAX_ADVANCE_DAYS)->endOfDay()->toDateTimeString(),
+            ],
+        ], [
+            'scheduled_at.before_or_equal' => 'Les réservations en ligne sont ouvertes jusqu\'à '
+                .(Appointment::MAX_ADVANCE_DAYS / 30).' mois à l\'avance.',
         ]);
 
         // Au plus MAX_PENDING_PER_SALON demandes en attente par cliente et par

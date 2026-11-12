@@ -101,6 +101,10 @@ class Appointment extends Model
     // Demandes en ligne en attente autorisées par cliente et par salon.
     const MAX_PENDING_PER_SALON = 3;
 
+    // Réservation en ligne possible jusqu'à 3 mois à l'avance. Le salon, lui,
+    // peut saisir un rendez-vous plus lointain (mariage, événement).
+    const MAX_ADVANCE_DAYS = 90;
+
     public function clientCanCancel(): bool
     {
         if ($this->status === 'pending') {
