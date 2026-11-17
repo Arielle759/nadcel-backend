@@ -183,11 +183,12 @@ class ManagerActivityStatsTest extends TestCase
             'status'       => 'completed',
         ]);
 
-        // Même en tentant de forcer un salon dans l'URL, seul son propre salon est pris en compte.
+        // Sans filtre, le salon d'un autre gérant n'est jamais compté…
+        $this->activity()->assertOk()->assertJsonPath('totals.completed', 0);
+        // … et le demander explicitement dans l'URL est refusé.
         $this->actingAs($this->manager, 'api')
             ->getJson("/api/manager/stats/activity?period=month&salon_id={$otherSalon->id}")
-            ->assertOk()
-            ->assertJsonPath('totals.completed', 0);
+            ->assertForbidden();
     }
 
     public function test_client_cannot_access_activity_stats(): void

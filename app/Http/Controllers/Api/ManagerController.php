@@ -7,6 +7,7 @@ use App\Services\ManagerActivityStatsService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 
 class ManagerController extends Controller
 {
@@ -17,9 +18,25 @@ class ManagerController extends Controller
         return response()->json($salons);
     }
 
+    // Salons pris en compte : tous ceux du gérant, ou un seul (?salon_id=) s'il lui appartient.
+    private function scopedSalonIds(Request $request): Collection
+    {
+        $validated = $request->validate(['salon_id' => 'sometimes|integer']);
+        $ids = $request->user()->salons()->pluck('id');
+
+        if (isset($validated['salon_id'])) {
+            $id = (int) $validated['salon_id'];
+            abort_unless($ids->contains($id), 403, 'Ce salon ne fait pas partie de vos salons.');
+
+            return collect([$id]);
+        }
+
+        return $ids;
+    }
+
     public function stats(Request $request)
     {
-        $salonIds = $request->user()->salons()->pluck('id');
+        $salonIds = $this->scopedSalonIds($request);
 
         $appointmentStats = Appointment::whereIn('salon_id', $salonIds)
             ->selectRaw('status, COUNT(*) as total')
@@ -45,18 +62,48 @@ class ManagerController extends Controller
             // Rendez-vous passés encore ouverts : un oubli de clôture, pas de l'argent dû.
             'to_close'     => (clone $open)->where('scheduled_at', '<', now())->count(),
             'upcoming'     => (clone $open)->where('scheduled_at', '>=', now())->count(),
+            // Demandes en ligne qui attendent une réponse du salon (compteur de la cloche).
+            'pending'      => Appointment::whereIn('salon_id', $salonIds)
+                ->where('status', 'pending')
+                ->where('scheduled_at', '>=', now())
+                ->count(),
+            'next_appointment' => $this->nextAppointment($salonIds),
         ]);
     }
 
-    // GET /manager/stats/activity?period=month|quarter|year
-    // Les salons sont toujours ceux du gérant connecté : aucun identifiant de salon n'est accepté.
+    private function nextAppointment(Collection $salonIds): ?array
+    {
+        $next = Appointment::with(['service:id,name', 'salon:id,name', 'client:id,name'])
+            ->whereIn('salon_id', $salonIds)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('scheduled_at', '>=', now())
+            ->orderBy('scheduled_at')
+            ->first();
+
+        if (! $next) {
+            return null;
+        }
+
+        return [
+            'id'           => $next->id,
+            'scheduled_at' => $next->scheduled_at,
+            'status'       => $next->status,
+            'client_name'  => $next->client?->name ?? $next->client_name,
+            'service'      => $next->service?->name,
+            'option_label' => $next->option_label,
+            'salon'        => $next->salon?->name,
+        ];
+    }
+
+    // GET /manager/stats/activity?period=month|quarter|year[&salon_id=]
+    // Tous les salons du gérant connecté, ou un seul (?salon_id=) s'il lui appartient.
     public function activity(Request $request, ManagerActivityStatsService $stats): JsonResponse
     {
         $validated = $request->validate([
             'period' => 'sometimes|string|in:'.implode(',', array_keys(ManagerActivityStatsService::PERIODS)),
         ]);
 
-        $salonIds = $request->user()->salons()->pluck('id');
+        $salonIds = $this->scopedSalonIds($request);
 
         return response()->json($stats->build($salonIds, $validated['period'] ?? 'month'));
     }
