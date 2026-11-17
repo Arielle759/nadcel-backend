@@ -74,6 +74,64 @@ class ManagerController extends Controller
         ]);
     }
 
+    // GET /manager/clients?salon_id=&search=&page=
+    // Clients des salons du gérant, avec ou sans compte (rendez-vous saisis par
+    // le salon) : nombre de rendez-vous, visites réalisées, dernière visite,
+    // prochain rendez-vous et montant encaissé.
+    public function clients(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'search' => 'sometimes|nullable|string|max:100',
+            'page'   => 'sometimes|integer|min:1',
+        ]);
+        $salonIds = $this->scopedSalonIds($request);
+        $now = now();
+
+        $rows = Appointment::with('client:id,name,email,phone')
+            ->whereIn('salon_id', $salonIds)
+            ->where('status', '!=', 'cancelled')
+            ->get(['id', 'client_id', 'client_name', 'client_phone', 'scheduled_at', 'status', 'payment_status', 'amount_paid', 'price'])
+            ->groupBy(fn (Appointment $a) => $a->client_id
+                ? 'u'.$a->client_id
+                : 'n'.mb_strtolower(trim((string) $a->client_name)).'|'.preg_replace('/\D+/', '', (string) $a->client_phone))
+            ->map(function ($group) use ($now) {
+                $first = $group->first();
+                $done = $group->where('status', 'completed');
+                $next = $group->whereIn('status', ['pending', 'confirmed'])->filter(fn ($a) => $a->scheduled_at >= $now)->sortBy('scheduled_at')->first();
+
+                return [
+                    'key'          => $first->client_id ? 'u'.$first->client_id : 'n'.$first->id,
+                    'name'         => $first->client?->name ?? $first->client_name ?? 'Client',
+                    'email'        => $first->client?->email,
+                    'phone'        => $first->client?->phone ?? $group->pluck('client_phone')->filter()->first(),
+                    'has_account'  => $first->client_id !== null,
+                    'appointments' => $group->count(),
+                    'visits'       => $done->count(),
+                    'last_visit'   => $done->max('scheduled_at'),
+                    'next_visit'   => $next?->scheduled_at,
+                    'spent'        => round((float) $done->where('payment_status', 'paid')->sum(fn ($a) => $a->collectedAmount()), 2),
+                ];
+            })
+            ->values();
+
+        if ($search = mb_strtolower(trim($validated['search'] ?? ''))) {
+            $rows = $rows->filter(fn ($c) => str_contains(mb_strtolower($c['name']), $search)
+                || str_contains(mb_strtolower((string) $c['email']), $search)
+                || str_contains(preg_replace('/\D+/', '', (string) $c['phone']), preg_replace('/\D+/', '', $search) ?: "\0"))->values();
+        }
+
+        $rows = $rows->sortByDesc(fn ($c) => [$c['visits'], (string) $c['last_visit']])->values();
+        $perPage = 25;
+        $page = (int) ($validated['page'] ?? 1);
+
+        return response()->json([
+            'data'         => $rows->forPage($page, $perPage)->values(),
+            'current_page' => $page,
+            'last_page'    => max(1, (int) ceil($rows->count() / $perPage)),
+            'total'        => $rows->count(),
+        ]);
+    }
+
     // Planning du jour (hors annulés) et comparaison avec la veille.
     private function today(Collection $salonIds): array
     {

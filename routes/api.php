@@ -111,6 +111,7 @@ Route::middleware(['auth:api', 'active'])->group(function () {
         Route::get('salons', [Api\ManagerController::class, 'salons']);
         Route::get('stats', [Api\ManagerController::class, 'stats']);
         Route::get('stats/activity', [Api\ManagerController::class, 'activity'])->middleware('throttle:30,1');
+        Route::get('clients', [Api\ManagerController::class, 'clients'])->middleware('throttle:60,1');
         // Rendez-vous pris par WhatsApp, téléphone ou sur place, saisi par le gérant.
         Route::post('appointments', [Api\AppointmentController::class, 'storeOffline'])->middleware('throttle:60,1');
         // Rappel envoyé à la main par WhatsApp (cliente sans compte, donc sans e-mail).

@@ -130,4 +130,30 @@ class ManagerSalonFilterTest extends TestCase
             ->assertJsonPath('rating.average', 4)
             ->assertJsonPath('rating.count', 1);
     }
+
+    public function test_clients_list_groups_accounts_and_walk_ins_per_salon(): void
+    {
+        $client = User::factory()->create(['name' => 'Awa Diop']);
+        $client->assignRole('client');
+        $this->appointment($this->first, '2026-11-01 10:00', 'completed', ['client_id' => $client->id, 'payment_status' => 'paid', 'amount_paid' => 15000]);
+        $this->appointment($this->first, '2026-11-10 10:00', 'completed', ['client_id' => $client->id, 'payment_status' => 'paid', 'amount_paid' => 5000]);
+        $this->appointment($this->first, '2026-11-25 10:00', 'confirmed', ['client_id' => $client->id]);
+        $this->appointment($this->first, '2026-11-05 10:00', 'completed', ['client_id' => null, 'client_name' => 'Fatou Sow', 'client_phone' => '77 123 45 67', 'source' => 'phone']);
+        $this->appointment($this->first, '2026-11-12 10:00', 'cancelled', ['client_id' => null, 'client_name' => 'Annulée', 'client_phone' => '700000000', 'source' => 'phone']);
+        $this->appointment($this->second, '2026-11-06 10:00', 'completed', ['client_id' => null, 'client_name' => 'Autre salon', 'source' => 'walk_in']);
+
+        $res = $this->actingAs($this->manager, 'api')->getJson('/api/manager/clients?salon_id='.$this->first->id)->assertOk();
+        $res->assertJsonPath('total', 2)
+            ->assertJsonPath('data.0.name', 'Awa Diop')
+            ->assertJsonPath('data.0.visits', 2)
+            ->assertJsonPath('data.0.appointments', 3)
+            ->assertJsonPath('data.0.spent', 20000)
+            ->assertJsonPath('data.1.name', 'Fatou Sow')
+            ->assertJsonPath('data.1.has_account', false);
+        $this->assertNotNull($res->json('data.0.next_visit'));
+
+        $this->actingAs($this->manager, 'api')->getJson('/api/manager/clients?search=771234')
+            ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.name', 'Fatou Sow');
+        $this->actingAs($this->manager, 'api')->getJson('/api/manager/clients')->assertOk()->assertJsonPath('total', 3);
+    }
 }
