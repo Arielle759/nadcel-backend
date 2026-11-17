@@ -22,6 +22,12 @@ Route::post('/auth/login', function (Request $request) {
         return response()->json(['error' => 'Invalid credentials'], 401);
     }
 
+    if (auth('api')->user()->suspended_at !== null) {
+        auth('api')->logout();
+
+        return response()->json(['message' => 'Ce compte a été suspendu. Contactez l\'équipe NADCEL.'], 403);
+    }
+
     return response()->json([
         'token' => $token,
         'user' => auth('api')->user()->load('roles'),
@@ -75,7 +81,7 @@ Route::get('/search/suggestions', Api\SearchSuggestionController::class)->middle
 Route::get('/services/{service}', [Api\ServiceController::class, 'show']);
 
 // Routes protégées
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api', 'active'])->group(function () {
     // Demande de partenariat : limitée pour éviter les créations de salons en masse.
     Route::post('salons', [Api\SalonController::class, 'store'])->middleware('throttle:10,60');
     Route::get('my-salons', [Api\SalonController::class, 'mine']);
@@ -116,7 +122,10 @@ Route::middleware('auth:api')->group(function () {
         Route::get('salons', [Api\AdminController::class, 'allSalons']);
         Route::get('salons/pending', [Api\AdminController::class, 'pendingSalons']);
         Route::get('stats', [Api\AdminController::class, 'stats']);
+        Route::get('users', [Api\AdminController::class, 'users']);
         // Routes paramétriques
+        Route::patch('users/{user}/suspend', [Api\AdminController::class, 'suspendUser']);
+        Route::patch('users/{user}/reactivate', [Api\AdminController::class, 'reactivateUser']);
         Route::patch('salons/{salon}/verify', [Api\AdminController::class, 'verifySalon']);
         Route::patch('salons/{salon}/reject', [Api\AdminController::class, 'rejectSalon']);
         Route::patch('salons/{salon}/suspend', [Api\AdminController::class, 'suspendSalon']);

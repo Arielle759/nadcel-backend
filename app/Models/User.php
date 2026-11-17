@@ -31,6 +31,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'suspended_at' => 'datetime',
         ];
     }
 
@@ -58,5 +59,11 @@ class User extends Authenticatable implements JWTSubject
     public function salons(): HasMany
     {
         return $this->hasMany(Salon::class, 'manager_id');
+    }
+
+    // Rendez-vous pris en tant que client.
+    public function clientAppointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class, 'client_id');
     }
 }

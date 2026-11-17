@@ -112,4 +112,22 @@ class ManagerSalonFilterTest extends TestCase
         $this->actingAs($this->manager, 'api')->getJson('/api/manager/stats?salon_id='.$foreign->id)->assertForbidden();
         $this->actingAs($this->manager, 'api')->getJson('/api/manager/stats/activity?salon_id='.$foreign->id)->assertForbidden();
     }
+
+    public function test_today_schedule_and_rating(): void
+    {
+        $this->appointment($this->first, '2026-11-18 09:00', 'confirmed');
+        $this->appointment($this->first, '2026-11-18 15:00', 'pending', ['client_id' => null, 'client_name' => 'Fatou', 'source' => 'phone']);
+        $this->appointment($this->first, '2026-11-18 16:00', 'cancelled');
+        $this->appointment($this->first, '2026-11-17 11:00', 'completed');
+        $done = $this->appointment($this->first, '2026-11-10 11:00', 'completed');
+        \App\Models\Review::factory()->create(['appointment_id' => $done->id, 'salon_id' => $this->first->id, 'client_id' => $done->client_id, 'rating' => 4]);
+
+        $this->actingAs($this->manager, 'api')->getJson('/api/manager/stats?salon_id='.$this->first->id)
+            ->assertOk()
+            ->assertJsonPath('today.count', 2)
+            ->assertJsonPath('today.yesterday', 1)
+            ->assertJsonPath('today.list.1.client_name', 'Fatou')
+            ->assertJsonPath('rating.average', 4)
+            ->assertJsonPath('rating.count', 1);
+    }
 }

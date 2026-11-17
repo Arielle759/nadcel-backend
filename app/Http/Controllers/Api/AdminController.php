@@ -185,7 +185,42 @@ class AdminController extends Controller
                 'low_reviews'    => Review::where('rating', '<=', 2)->where('created_at', '>=', $last30)->count(),
             ],
             'monthly' => $this->monthly($now),
+            'recent_appointments' => $this->recentAppointments(),
+            'cities'  => $this->cities(),
         ]);
+    }
+
+    // Derniers rendez-vous enregistrés sur la plateforme (en ligne ou saisis par un salon).
+    private function recentAppointments(): array
+    {
+        return Appointment::with(['salon:id,name', 'service:id,name'])
+            ->latest('created_at')
+            ->latest('id')
+            ->limit(6)
+            ->get()
+            ->map(fn (Appointment $a) => [
+                'id'           => $a->id,
+                'salon'        => $a->salon?->name,
+                'service'      => $a->service?->name,
+                'option_label' => $a->option_label,
+                'scheduled_at' => $a->scheduled_at,
+                'price'        => (float) $a->price,
+                'status'       => $a->status,
+            ])
+            ->all();
+    }
+
+    // Répartition des salons en ligne par ville.
+    private function cities(): array
+    {
+        $byCity = Salon::public()->selectRaw('city, COUNT(*) as total')->groupBy('city')->orderByDesc('total')->pluck('total', 'city');
+        $total = $byCity->sum();
+
+        return $byCity->map(fn ($count, $city) => [
+            'city'  => $city,
+            'count' => (int) $count,
+            'share' => $total > 0 ? round($count / $total * 100, 1) : 0,
+        ])->values()->all();
     }
 
     /** Rendez-vous (par date de passage) et nouvelles clientes, sur 12 mois complets + le mois en cours. */
@@ -209,6 +244,59 @@ class AdminController extends Controller
     }
 
     /** Équivalent de User::role(), sans exception si le rôle n'existe pas encore. */
+    // GET /admin/users?search=&role=client|gerant|admin&page=
+    public function users(Request $request)
+    {
+        $validated = $request->validate([
+            'search' => 'sometimes|nullable|string|max:100',
+            'role'   => 'sometimes|nullable|string|in:client,gerant,admin',
+            'status' => 'sometimes|nullable|string|in:active,suspended',
+        ]);
+
+        $users = User::query()
+            ->with('roles:id,name')
+            ->withCount(['clientAppointments as appointments_count', 'salons as salons_count'])
+            ->when($validated['search'] ?? null, function ($query, string $search) {
+                $like = '%'.mb_strtolower(trim($search)).'%';
+                $query->where(fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', [$like])->orWhereRaw('LOWER(email) LIKE ?', [$like]));
+            })
+            ->when($validated['role'] ?? null, fn ($query, string $role) => $query->whereHas('roles', fn ($q) => $q->where('name', $role)))
+            ->when(($validated['status'] ?? null) === 'suspended', fn ($query) => $query->whereNotNull('suspended_at'))
+            ->when(($validated['status'] ?? null) === 'active', fn ($query) => $query->whereNull('suspended_at'))
+            ->latest()
+            ->paginate(20, ['id', 'name', 'email', 'phone', 'created_at', 'suspended_at']);
+
+        return response()->json($users);
+    }
+
+    // PATCH /admin/users/{user}/suspend : jamais un administrateur, ni soi-même.
+    public function suspendUser(Request $request, User $user)
+    {
+        if ($user->id === $request->user()->id) {
+            return response()->json(['message' => 'Vous ne pouvez pas suspendre votre propre compte.'], 422);
+        }
+        if ($user->hasRole('admin')) {
+            return response()->json(['message' => 'Un compte administrateur ne peut pas être suspendu.'], 422);
+        }
+
+        $user->forceFill(['suspended_at' => now()])->save();
+
+        return response()->json($this->userRow($user));
+    }
+
+    // PATCH /admin/users/{user}/reactivate
+    public function reactivateUser(User $user)
+    {
+        $user->forceFill(['suspended_at' => null])->save();
+
+        return response()->json($this->userRow($user));
+    }
+
+    private function userRow(User $user): User
+    {
+        return $user->load('roles:id,name')->loadCount(['clientAppointments as appointments_count', 'salons as salons_count']);
+    }
+
     private function usersWithRole(string $role)
     {
         return User::whereHas('roles', fn ($q) => $q->where('name', $role));

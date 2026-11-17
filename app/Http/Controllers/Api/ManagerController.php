@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Appointment;
+use App\Models\Review;
 use App\Services\ManagerActivityStatsService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -68,7 +69,50 @@ class ManagerController extends Controller
                 ->where('scheduled_at', '>=', now())
                 ->count(),
             'next_appointment' => $this->nextAppointment($salonIds),
+            'today'            => $this->today($salonIds),
+            'rating'           => $this->rating($salonIds),
         ]);
+    }
+
+    // Planning du jour (hors annulés) et comparaison avec la veille.
+    private function today(Collection $salonIds): array
+    {
+        $start = now()->startOfDay();
+        $active = fn () => Appointment::whereIn('salon_id', $salonIds)->where('status', '!=', 'cancelled');
+
+        $list = $active()
+            ->with(['service:id,name', 'client:id,name', 'employee:id,name'])
+            ->whereBetween('scheduled_at', [$start, $start->copy()->endOfDay()])
+            ->orderBy('scheduled_at')
+            ->limit(6)
+            ->get()
+            ->map(fn (Appointment $a) => [
+                'id'           => $a->id,
+                'scheduled_at' => $a->scheduled_at,
+                'status'       => $a->status,
+                'client_name'  => $a->client?->name ?? $a->client_name,
+                'employee'     => $a->employee?->name,
+                'service'      => $a->service?->name,
+                'option_label' => $a->option_label,
+            ]);
+
+        return [
+            'count'     => $active()->whereBetween('scheduled_at', [$start, $start->copy()->endOfDay()])->count(),
+            'yesterday' => $active()->whereBetween('scheduled_at', [$start->copy()->subDay(), $start->copy()->subSecond()])->count(),
+            'list'      => $list,
+        ];
+    }
+
+    // Note moyenne des avis des salons concernés.
+    private function rating(Collection $salonIds): array
+    {
+        $reviews = Review::whereIn('salon_id', $salonIds);
+        $count = (clone $reviews)->count();
+
+        return [
+            'average' => $count > 0 ? round((float) (clone $reviews)->avg('rating'), 1) : null,
+            'count'   => $count,
+        ];
     }
 
     private function nextAppointment(Collection $salonIds): ?array
