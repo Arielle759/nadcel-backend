@@ -76,6 +76,7 @@ Route::get('/reviews/highlights', [Api\ReviewController::class, 'highlights'])->
 // Avis d'un salon sur sa page publique (prénom et initiale uniquement).
 Route::get('/salons/{salon}/reviews', [Api\ReviewController::class, 'forSalon'])->middleware('throttle:60,1');
 Route::get('/services', [Api\ServiceController::class, 'index']);
+Route::get('/categories', Api\CategoryController::class)->middleware('throttle:120,1');
 // Suggestions pendant la saisie dans la recherche (salons, services, lieux).
 Route::get('/search/suggestions', Api\SearchSuggestionController::class)->middleware('throttle:120,1');
 Route::get('/services/{service}', [Api\ServiceController::class, 'show']);
