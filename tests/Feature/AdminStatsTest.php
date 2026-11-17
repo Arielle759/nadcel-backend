@@ -72,7 +72,7 @@ class AdminStatsTest extends TestCase
 
         $this->actingAs($this->admin, 'api')->getJson('/api/admin/stats')
             ->assertOk()
-            ->assertJsonPath('salons', ['online' => 2, 'pending' => 1, 'suspended' => 1, 'rejected' => 1])
+            ->assertJsonPath('salons', ['total' => 5, 'online' => 2, 'pending' => 1, 'suspended' => 1, 'rejected' => 1])
             ->assertJsonPath('to_review.pending_salons', 1);
     }
 
@@ -147,6 +147,50 @@ class AdminStatsTest extends TestCase
         $march = collect($monthly)->firstWhere('month', '2026-03');
         $this->assertSame(1, $march['appointments']);
         $this->assertSame(1, $march['new_clients']);
+    }
+
+    public function test_monthly_series_counts_new_salons_and_cancellations(): void
+    {
+        $salon = Salon::factory()->create(['is_verified' => true, 'is_active' => true, 'created_at' => '2026-04-05 09:00:00']);
+        Salon::factory()->create(['is_verified' => false, 'is_active' => true, 'created_at' => '2026-04-20 09:00:00']);
+        $this->appointment($salon, '2026-04-10 10:00:00', ['status' => 'cancelled']);
+        $this->appointment($salon, '2026-04-11 10:00:00');
+
+        $april = collect($this->actingAs($this->admin, 'api')->getJson('/api/admin/stats')->json('monthly'))->firstWhere('month', '2026-04');
+
+        $this->assertSame(2, $april['new_salons']);
+        $this->assertSame(1, $april['cancelled']);
+        $this->assertSame(2, $april['appointments']);
+    }
+
+    public function test_totals_and_signup_growth(): void
+    {
+        $salon = $this->salonIn('online');
+        $this->appointment($salon, '2025-12-01 10:00:00');
+        $this->appointment($salon, '2026-10-02 10:00:00');
+        // Du 1er au 15 octobre : 3 inscriptions. Du 1er au 15 septembre : 2 (la 3e est hors période).
+        foreach (['2026-10-01', '2026-10-05', '2026-10-14', '2026-09-02', '2026-09-10', '2026-09-28'] as $date) {
+            User::factory()->create(['created_at' => "$date 09:00:00"])->assignRole('client');
+        }
+
+        $this->actingAs($this->admin, 'api')->getJson('/api/admin/stats')
+            ->assertOk()
+            ->assertJsonPath('appointments.total', 2)
+            ->assertJsonPath('users.new_clients', 3)
+            ->assertJsonPath('users.signup_trend', 50);
+    }
+
+    public function test_recent_signups_list_clients_and_managers_only(): void
+    {
+        User::factory()->create(['name' => 'Awa Diop', 'created_at' => '2026-10-10 09:00:00'])->assignRole('client');
+        User::factory()->create(['name' => 'Moussa Fall', 'created_at' => '2026-10-12 09:00:00'])->assignRole('gerant');
+        User::factory()->create(['name' => 'Autre Admin', 'created_at' => '2026-10-13 09:00:00'])->assignRole('admin');
+
+        $signups = $this->actingAs($this->admin, 'api')->getJson('/api/admin/stats')->assertOk()->json('recent_signups');
+
+        $this->assertSame(['Moussa Fall', 'Awa Diop'], array_column($signups, 'name'));
+        $this->assertSame(['gerant', 'client'], array_column($signups, 'role'));
+        $this->assertArrayNotHasKey('email', $signups[0]);
     }
 
     public function test_recent_low_reviews_are_flagged(): void

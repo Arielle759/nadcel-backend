@@ -135,6 +135,7 @@ class AdminController extends Controller
         $last30 = $now->copy()->subDays(30);
 
         $salons = [
+            'total'     => Salon::count(),
             'online'    => Salon::public()->count(),
             'pending'   => Salon::where('is_verified', false)->where('is_active', true)->count(),
             'suspended' => Salon::where('is_verified', true)->where('is_active', false)->count(),
@@ -143,6 +144,11 @@ class AdminController extends Controller
 
         $clients = $this->usersWithRole('client')->count();
         $newClients = $this->usersWithRole('client')->where('created_at', '>=', $monthStart)->count();
+        // Croissance des inscriptions, à date égale (même logique que les rendez-vous).
+        $newClientsLastMonth = $this->usersWithRole('client')
+            ->whereBetween('created_at', [$previousStart, $sameDayLastMonth])
+            ->count();
+
 
         // Comparaison à date égale : du 1er au jour J ce mois-ci, contre la même
         // période le mois dernier (sinon un mois en cours paraît toujours en baisse).
@@ -167,9 +173,13 @@ class AdminController extends Controller
             'users'  => [
                 'clients'      => $clients,
                 'new_clients'  => $newClients,
+                'signup_trend' => $newClientsLastMonth > 0
+                    ? round(($newClients - $newClientsLastMonth) / $newClientsLastMonth * 100, 1)
+                    : null,
                 'managers'     => $this->usersWithRole('gerant')->count(),
             ],
             'appointments' => [
+                'total'                    => Appointment::count(),
                 'this_month'               => $thisMonth,
                 'last_month_same_period'   => $lastMonthSamePeriod,
                 'trend'                    => $lastMonthSamePeriod > 0
@@ -186,6 +196,7 @@ class AdminController extends Controller
             ],
             'monthly' => $this->monthly($now),
             'recent_appointments' => $this->recentAppointments(),
+            'recent_signups'      => $this->recentSignups(),
             'cities'  => $this->cities(),
         ]);
     }
@@ -206,6 +217,25 @@ class AdminController extends Controller
                 'scheduled_at' => $a->scheduled_at,
                 'price'        => (float) $a->price,
                 'status'       => $a->status,
+            ])
+            ->all();
+    }
+
+    // Dernières inscriptions de clientes et de gérants (les administrateurs ne
+    // sont pas listés). Nom, rôle et date seulement : le détail est dans Utilisateurs.
+    private function recentSignups(): array
+    {
+        return User::with('roles:id,name')
+            ->whereHas('roles', fn ($q) => $q->whereIn('name', ['client', 'gerant']))
+            ->latest('created_at')
+            ->latest('id')
+            ->limit(6)
+            ->get(['id', 'name', 'created_at'])
+            ->map(fn (User $u) => [
+                'id'         => $u->id,
+                'name'       => $u->name,
+                'role'       => $u->roles->pluck('name')->contains('gerant') ? 'gerant' : 'client',
+                'created_at' => $u->created_at,
             ])
             ->all();
     }
@@ -236,6 +266,8 @@ class AdminController extends Controller
                 'month'        => $start->format('Y-m'),
                 'appointments' => Appointment::where('scheduled_at', '>=', $start)->where('scheduled_at', '<', $end)->count(),
                 'new_clients'  => $this->usersWithRole('client')->where('created_at', '>=', $start)->where('created_at', '<', $end)->count(),
+                'new_salons'   => Salon::where('created_at', '>=', $start)->where('created_at', '<', $end)->count(),
+                'cancelled'    => Appointment::where('status', 'cancelled')->where('scheduled_at', '>=', $start)->where('scheduled_at', '<', $end)->count(),
                 'is_partial'   => $offset === 0,
             ];
         }
