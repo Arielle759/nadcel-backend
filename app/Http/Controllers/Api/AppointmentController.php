@@ -252,6 +252,18 @@ class AppointmentController extends Controller
             if (!$isSalonSide) {
                 abort_unless($locked->client_id === $user->id && $nouveauStatut === 'cancelled', 403);
             }
+            // Retard après une absence détectée : le reste du créneau a pu être
+            // réservé entre-temps par une autre cliente.
+            if ($nouveauStatut === 'in_progress' && $locked->status === 'no_show' && $locked->employee) {
+                $free = $this->availability->isEmployeeAvailable(
+                    $locked->employee, $locked->scheduled_at, $locked->duration, $locked->id
+                );
+                if (!$free) {
+                    throw ValidationException::withMessages(['status' => [
+                        'Le créneau a été réservé entre-temps par une autre cliente : proposez-lui un nouveau rendez-vous.',
+                    ]]);
+                }
+            }
             // Arrivée de la cliente : au plus tôt 30 min avant l'heure prévue.
             if ($nouveauStatut === 'in_progress' && $locked->scheduled_at->copy()->subMinutes(30)->isFuture()) {
                 throw ValidationException::withMessages(['status' => [

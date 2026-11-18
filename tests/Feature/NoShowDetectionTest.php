@@ -92,6 +92,32 @@ class NoShowDetectionTest extends TestCase
         $this->assertSame('completed', $appointment->fresh()->status);
     }
 
+    public function test_late_client_can_still_be_signalled_arrived_if_the_slot_is_still_free(): void
+    {
+        $employee = Employee::factory()->create(['salon_id' => $this->salon->id]);
+        $appointment = $this->appointment('no_show', -50, ['employee_id' => $employee->id, 'duration' => 180]);
+
+        $this->actingAs($this->manager, 'api')
+            ->patchJson("/api/appointments/{$appointment->id}", ['status' => 'in_progress'])
+            ->assertOk();
+
+        $this->assertSame('in_progress', $appointment->fresh()->status);
+    }
+
+    public function test_late_client_cannot_take_back_a_slot_rebooked_in_the_meantime(): void
+    {
+        $employee = Employee::factory()->create(['salon_id' => $this->salon->id]);
+        $appointment = $this->appointment('no_show', -50, ['employee_id' => $employee->id, 'duration' => 180]);
+        $this->appointment('confirmed', 20, ['employee_id' => $employee->id, 'duration' => 60]);
+
+        $this->actingAs($this->manager, 'api')
+            ->patchJson("/api/appointments/{$appointment->id}", ['status' => 'in_progress'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+
+        $this->assertSame('no_show', $appointment->fresh()->status);
+    }
+
     public function test_absent_appointment_no_longer_blocks_the_employee(): void
     {
         $employee = Employee::factory()->create(['salon_id' => $this->salon->id]);

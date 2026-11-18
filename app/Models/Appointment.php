@@ -58,7 +58,9 @@ class Appointment extends Model
         'in_progress' => ['completed'],
         'completed'   => [],
         'cancelled'   => [],
-        'no_show'     => [],
+        // Cliente arrivée en retard après la détection d'absence : le salon la
+        // signale arrivée, si l'employé n'a pas été réservé entre-temps.
+        'no_show'     => ['in_progress'],
     ];
 
     // Statuts qui ne bloquent plus le créneau de l'employé.
