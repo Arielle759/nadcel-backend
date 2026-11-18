@@ -7,7 +7,7 @@ Architecture en production :
 | Site (Next.js) | Vercel, offre Hobby | Pages publiques et espaces client, gérant, admin |
 | API (Laravel) | Railway, service `api` | API REST, photos des salons et prestations |
 | Base de données | Railway, PostgreSQL | Données de l'application |
-| Rappels de la veille | Railway, service `rappels` (cron) | `appointments:send-reminders` toutes les 15 min |
+| Rappels et absences | Railway, service `rappels` (cron) | `appointments:send-reminders` puis `appointments:mark-no-shows` toutes les 15 min |
 | E-mails | Brevo, offre gratuite | Envoi SMTP (300 e-mails par jour) |
 
 Railway détecte Laravel automatiquement (pas de Dockerfile) et le sert avec
@@ -89,8 +89,11 @@ de fichier `.env`.
 - **Settings → Deploy → Custom Start Command** :
 
   ```
-  php artisan appointments:send-reminders
+  php artisan appointments:send-reminders && php artisan appointments:mark-no-shows
   ```
+
+  La deuxième commande marque « Absente » les rendez-vous confirmés dont la
+  cliente n'a pas été signalée arrivée 30 minutes après l'heure prévue.
 
 - **Settings → Cron Schedule** :
 

@@ -240,7 +240,7 @@ class AppointmentController extends Controller
     public function update(Request $request, Appointment $appointment)
     {
         $validated = $request->validate([
-            'status' => 'required|string|in:pending,confirmed,completed,cancelled,no_show',
+            'status' => 'required|string|in:pending,confirmed,in_progress,completed,cancelled,no_show',
         ]);
 
         $user = $request->user();
@@ -251,6 +251,12 @@ class AppointmentController extends Controller
             $isSalonSide = Gate::forUser($user)->allows('manage', $locked);
             if (!$isSalonSide) {
                 abort_unless($locked->client_id === $user->id && $nouveauStatut === 'cancelled', 403);
+            }
+            // Arrivée de la cliente : au plus tôt 30 min avant l'heure prévue.
+            if ($nouveauStatut === 'in_progress' && $locked->scheduled_at->copy()->subMinutes(30)->isFuture()) {
+                throw ValidationException::withMessages(['status' => [
+                    'L\'arrivée ne peut être signalée que 30 minutes avant le rendez-vous au plus tôt.',
+                ]]);
             }
             // « Terminé » passe uniquement par la clôture (PATCH /complete) : elle
             // exige que le rendez-vous ait commencé et enregistre le paiement.
@@ -333,8 +339,10 @@ class AppointmentController extends Controller
             $this->authorize('pay', $locked);
 
             // Une demande restée « en attente » dont la cliente est bien venue se
-            // clôture directement : inutile de la confirmer après coup.
-            if (!in_array($locked->status, ['pending', 'confirmed'], true)) {
+            // clôture directement : inutile de la confirmer après coup. Une absence
+            // détectée à tort (cliente arrivée sans être signalée) se corrige aussi
+            // en clôturant le rendez-vous.
+            if (!in_array($locked->status, ['pending', 'confirmed', 'in_progress', 'no_show'], true)) {
                 throw ValidationException::withMessages([
                     'status' => ['Ce rendez-vous est déjà terminé ou annulé.'],
                 ]);

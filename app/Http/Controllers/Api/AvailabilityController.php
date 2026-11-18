@@ -38,7 +38,7 @@ class AvailabilityController extends Controller
 
         // Une seule requête pour tous les RDV du mois
         $appointments = Appointment::where('salon_id', $salon->id)
-            ->whereNotIn('status', ['cancelled'])
+            ->whereNotIn('status', Appointment::FREE_STATUSES)
             ->whereBetween('scheduled_at', [
                 $monthStart->copy()->startOfDay(),
                 $monthEnd->copy()->endOfDay(),
@@ -106,7 +106,7 @@ class AvailabilityController extends Controller
         }
 
         $appointments = Appointment::where('salon_id', $salon->id)
-            ->whereNotIn('status', ['cancelled'])
+            ->whereNotIn('status', Appointment::FREE_STATUSES)
             ->whereDate('scheduled_at', $day->toDateString())
             ->get(['employee_id', 'scheduled_at', 'duration']);
 

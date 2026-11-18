@@ -31,7 +31,7 @@ class AppointmentAvailabilityService
             $query->whereRaw($endExpression.' > ?', [$scheduledAt->toDateTimeString()]);
         }
         $existing = $query
-            ->whereNotIn('status', ['cancelled'])
+            ->whereNotIn('status', Appointment::FREE_STATUSES)
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
             ->get(['scheduled_at', 'duration']);
 

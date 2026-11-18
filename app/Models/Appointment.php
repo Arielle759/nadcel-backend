@@ -53,12 +53,20 @@ class Appointment extends Model
     use HasFactory, SoftDeletes;
 
     const ALLOWED_TRANSITIONS = [
-        'pending'   => ['confirmed', 'cancelled'],
-        'confirmed' => ['completed', 'cancelled', 'no_show'],
-        'completed' => [],
-        'cancelled' => [],
-        'no_show'   => [],
+        'pending'     => ['confirmed', 'cancelled'],
+        'confirmed'   => ['in_progress', 'completed', 'cancelled', 'no_show'],
+        'in_progress' => ['completed'],
+        'completed'   => [],
+        'cancelled'   => [],
+        'no_show'     => [],
     ];
+
+    // Statuts qui ne bloquent plus le créneau de l'employé.
+    const FREE_STATUSES = ['cancelled', 'no_show'];
+
+    // Absence détectée automatiquement : rendez-vous confirmé dont la cliente
+    // n'est pas signalée arrivée 30 min après l'heure prévue.
+    const NO_SHOW_AFTER_MINUTES = 30;
 
     protected $fillable = [
         'client_id',
@@ -79,6 +87,7 @@ class Appointment extends Model
         'paid_at',
         'reminder_sent_at',
         'cancelled_late',
+        'no_show_detected_at',
     ];
 
     /** Moyens de paiement utilisés sur place. */
@@ -132,6 +141,7 @@ class Appointment extends Model
         'paid_at' => 'datetime',
         'reminder_sent_at' => 'datetime',
         'cancelled_late' => 'boolean',
+        'no_show_detected_at' => 'datetime',
     ];
 
     /** Montant réellement encaissé ; à défaut (anciens rendez-vous), le prix prévu. */
