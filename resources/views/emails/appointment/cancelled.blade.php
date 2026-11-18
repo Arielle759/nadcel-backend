@@ -2,6 +2,9 @@
 Bonjour {{ $appointment->salon->manager->name }},
 
 Le client {{ $appointment->client->name }} a annulé son rendez-vous.
+@if ($appointment->cancelled_late)
+Attention : il s'agit d'une annulation tardive (moins de 24 h avant). Le créneau est de nouveau libre et peut être réservé par une autre cliente.
+@endif
 @else
 Bonjour {{ $appointment->client->name }},
 

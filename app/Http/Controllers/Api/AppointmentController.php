@@ -240,7 +240,7 @@ class AppointmentController extends Controller
     public function update(Request $request, Appointment $appointment)
     {
         $validated = $request->validate([
-            'status' => 'required|string|in:pending,confirmed,completed,cancelled',
+            'status' => 'required|string|in:pending,confirmed,completed,cancelled,no_show',
         ]);
 
         $user = $request->user();
@@ -264,11 +264,21 @@ class AppointmentController extends Controller
             }
             if (!$isSalonSide && !$locked->clientCanCancel()) {
                 throw ValidationException::withMessages(['status' => [
-                    'Ce rendez-vous commence dans moins de '.Appointment::CLIENT_CANCELLATION_HOURS
-                    .' h : contactez directement le salon pour l\'annuler.',
+                    'Ce rendez-vous a déjà commencé : il ne peut plus être annulé en ligne.',
                 ]]);
             }
-            $locked->update(['status' => $nouveauStatut]);
+            // Absence : seul le salon la constate, une fois l'heure du rendez-vous passée.
+            if ($nouveauStatut === 'no_show' && $locked->scheduled_at->isFuture()) {
+                throw ValidationException::withMessages(['status' => [
+                    'Une absence ne peut être enregistrée qu\'après l\'heure du rendez-vous.',
+                ]]);
+            }
+            $changes = ['status' => $nouveauStatut];
+            if ($nouveauStatut === 'cancelled' && !$isSalonSide) {
+                // Calcul automatique : annulation par la cliente moins de 24 h avant.
+                $changes['cancelled_late'] = $locked->isLateCancellation();
+            }
+            $locked->update($changes);
             return $locked;
         }, attempts: 3);
         $appointment->load('client', 'salon.manager', 'service');
@@ -297,7 +307,7 @@ class AppointmentController extends Controller
         $appointment = DB::transaction(function () use ($appointment) {
             $locked = Appointment::lockForUpdate()->findOrFail($appointment->id);
             $this->authorize('pay', $locked);
-            if ($locked->status === 'cancelled') {
+            if (in_array($locked->status, ['cancelled', 'no_show'], true)) {
                 throw ValidationException::withMessages(['status' => ['Cannot pay a cancelled appointment.']]);
             }
             if ($locked->payment_status !== 'paid') {

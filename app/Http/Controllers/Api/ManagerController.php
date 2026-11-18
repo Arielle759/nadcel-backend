@@ -89,13 +89,16 @@ class ManagerController extends Controller
 
         $rows = Appointment::with('client:id,name,email,phone')
             ->whereIn('salon_id', $salonIds)
-            ->where('status', '!=', 'cancelled')
-            ->get(['id', 'client_id', 'client_name', 'client_phone', 'scheduled_at', 'status', 'payment_status', 'amount_paid', 'price'])
+            ->where(fn ($q) => $q->where('status', '!=', 'cancelled')->orWhere('cancelled_late', true))
+            ->get(['id', 'client_id', 'client_name', 'client_phone', 'scheduled_at', 'status', 'cancelled_late', 'payment_status', 'amount_paid', 'price'])
             ->groupBy(fn (Appointment $a) => $a->client_id
                 ? 'u'.$a->client_id
                 : 'n'.mb_strtolower(trim((string) $a->client_name)).'|'.preg_replace('/\D+/', '', (string) $a->client_phone))
             ->map(function ($group) use ($now) {
                 $first = $group->first();
+                $lateCancellations = $group->where('status', 'cancelled')->count();
+                $group = $group->where('status', '!=', 'cancelled');
+                $first = $group->first() ?? $first;
                 $done = $group->where('status', 'completed');
                 $next = $group->whereIn('status', ['pending', 'confirmed'])->filter(fn ($a) => $a->scheduled_at >= $now)->sortBy('scheduled_at')->first();
 
@@ -110,6 +113,8 @@ class ManagerController extends Controller
                     'last_visit'   => $done->max('scheduled_at'),
                     'next_visit'   => $next?->scheduled_at,
                     'spent'        => round((float) $done->where('payment_status', 'paid')->sum(fn ($a) => $a->collectedAmount()), 2),
+                    'late_cancellations' => $lateCancellations,
+                    'no_shows'     => $group->where('status', 'no_show')->count(),
                 ];
             })
             ->values();

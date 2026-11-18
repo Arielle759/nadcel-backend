@@ -54,9 +54,10 @@ class Appointment extends Model
 
     const ALLOWED_TRANSITIONS = [
         'pending'   => ['confirmed', 'cancelled'],
-        'confirmed' => ['completed', 'cancelled'],
+        'confirmed' => ['completed', 'cancelled', 'no_show'],
         'completed' => [],
         'cancelled' => [],
+        'no_show'   => [],
     ];
 
     protected $fillable = [
@@ -77,6 +78,7 @@ class Appointment extends Model
         'payment_method',
         'paid_at',
         'reminder_sent_at',
+        'cancelled_late',
     ];
 
     /** Moyens de paiement utilisés sur place. */
@@ -93,10 +95,10 @@ class Appointment extends Model
         return $this->client?->name ?? $this->client_name ?? 'Client';
     }
 
-    // Un client peut annuler lui-même un rendez-vous confirmé jusqu'à 24 h avant.
-    // Une demande encore en attente reste annulable à tout moment : le salon ne
-    // s'est pas encore engagé. Passé ce délai, le client contacte le salon.
-    const CLIENT_CANCELLATION_HOURS = 24;
+    // Une cliente peut annuler en ligne jusqu'à l'heure du rendez-vous. Moins de
+    // 24 h avant, l'annulation d'un rendez-vous confirmé est « tardive » : elle est
+    // calculée automatiquement, signalée au salon et comptée dans le fichier clients.
+    const LATE_CANCELLATION_HOURS = 24;
 
     // Demandes en ligne en attente autorisées par cliente et par salon.
     const MAX_PENDING_PER_SALON = 3;
@@ -107,12 +109,15 @@ class Appointment extends Model
 
     public function clientCanCancel(): bool
     {
-        if ($this->status === 'pending') {
-            return true;
-        }
+        return in_array($this->status, ['pending', 'confirmed'], true)
+            && $this->scheduled_at->greaterThan(now());
+    }
 
+    /** Annulation tardive : rendez-vous confirmé annulé moins de 24 h avant. */
+    public function isLateCancellation(): bool
+    {
         return $this->status === 'confirmed'
-            && $this->scheduled_at->greaterThan(now()->addHours(self::CLIENT_CANCELLATION_HOURS));
+            && $this->scheduled_at->lessThanOrEqualTo(now()->addHours(self::LATE_CANCELLATION_HOURS));
     }
 
     public function canTransitionTo(string $newStatus): bool
@@ -126,6 +131,7 @@ class Appointment extends Model
         'amount_paid' => 'decimal:2',
         'paid_at' => 'datetime',
         'reminder_sent_at' => 'datetime',
+        'cancelled_late' => 'boolean',
     ];
 
     /** Montant réellement encaissé ; à défaut (anciens rendez-vous), le prix prévu. */

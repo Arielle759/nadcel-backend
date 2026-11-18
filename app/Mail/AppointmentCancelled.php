@@ -24,7 +24,7 @@ class AppointmentCancelled extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Rendez-vous annulé');
+        return new Envelope(subject: $this->appointment->cancelled_late ? 'Annulation tardive d\'un rendez-vous' : 'Rendez-vous annulé');
     }
 
     public function content(): Content
