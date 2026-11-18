@@ -151,7 +151,6 @@ class ManagerController extends Controller
                 'client_name'  => $a->client?->name ?? $a->client_name,
                 'employee'     => $a->employee?->name,
                 'service'      => $a->service?->name,
-                'option_label' => $a->option_label,
             ]);
 
         return [
@@ -192,7 +191,6 @@ class ManagerController extends Controller
             'status'       => $next->status,
             'client_name'  => $next->client?->name ?? $next->client_name,
             'service'      => $next->service?->name,
-            'option_label' => $next->option_label,
             'salon'        => $next->salon?->name,
         ];
     }

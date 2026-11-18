@@ -10,7 +10,7 @@ Votre rendez-vous a été annulé par le salon.
 
 --- Détails du rendez-vous annulé ---
 Salon    : {{ $appointment->salon->name }}
-Service  : {{ $appointment->service->name }}{{ $appointment->option_label ? ' ('.$appointment->option_label.')' : '' }}
+Service  : {{ $appointment->service->name }}
 Date     : {{ $appointment->scheduled_at->translatedFormat('l d F Y à H:i') }}
 Durée    : {{ $appointment->duration }} min
 Prix     : {{ number_format($appointment->price, 0, ',', ' ') }} FCFA

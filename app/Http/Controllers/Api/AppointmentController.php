@@ -70,7 +70,6 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'salon_id' => 'required|exists:salons,id',
             'service_id' => 'required|exists:services,id',
-            'service_option_id' => 'nullable|integer',
             'employee_id' => 'nullable|integer|exists:employees,id',
             'scheduled_at' => [
                 'required', 'date', 'after:now',
@@ -121,7 +120,6 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'salon_id'     => 'required|exists:salons,id',
             'service_id'   => 'required|exists:services,id',
-            'service_option_id' => 'nullable|integer',
             'employee_id'  => 'nullable|integer|exists:employees,id',
             'scheduled_at' => 'required|date|after:now',
             'client_name'  => 'required|string|max:120',
@@ -197,11 +195,8 @@ class AppointmentController extends Controller
                 ]);
             }
 
-            // Option choisie (ex. longueur des tresses) : elle fixe le prix et la durée.
-            [$option, $price, $duration] = $service->priceAndDurationFor($validated['service_option_id'] ?? null);
-
             $hours = $salon->openingHoursFor($scheduledAt);
-            $appointmentEnd = $scheduledAt->copy()->addMinutes($duration);
+            $appointmentEnd = $scheduledAt->copy()->addMinutes($service->duration);
             if (!$hours || $scheduledAt->lt($hours['open']) || $appointmentEnd->gt($hours['close'])) {
                 throw ValidationException::withMessages([
                     'scheduled_at' => ['Ce créneau est en dehors des horaires d’ouverture du salon.'],
@@ -214,7 +209,7 @@ class AppointmentController extends Controller
                 $salon,
                 $service,
                 $scheduledAt,
-                $duration,
+                $service->duration,
                 lockForUpdate: true,
                 employeeId: $validated['employee_id'] ?? null,
             );
@@ -229,10 +224,8 @@ class AppointmentController extends Controller
                 'service_id'   => $service->id,
                 'employee_id'  => $employee->id,
                 'scheduled_at' => $scheduledAt,
-                'service_option_id' => $option?->id,
-                'option_label' => $option?->label,
-                'duration'     => $duration,
-                'price'        => $price,
+                'duration'     => $service->duration,
+                'price'        => $service->price,
             ]);
         }, attempts: 3);
     }

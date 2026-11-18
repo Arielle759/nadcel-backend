@@ -213,7 +213,6 @@ class AdminController extends Controller
                 'id'           => $a->id,
                 'salon'        => $a->salon?->name,
                 'service'      => $a->service?->name,
-                'option_label' => $a->option_label,
                 'scheduled_at' => $a->scheduled_at,
                 'price'        => (float) $a->price,
                 'status'       => $a->status,
