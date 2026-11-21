@@ -55,4 +55,27 @@ class AuthTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_logout_invalidates_the_current_token(): void
+    {
+        $user = User::factory()->create(['password' => bcrypt('secret123')]);
+        $token = $this->postJson('/api/auth/login', [
+            'email'    => $user->email,
+            'password' => 'secret123',
+        ])->json('token');
+
+        $this->withToken($token)->getJson('/api/profile')->assertOk();
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->postJson('/api/auth/logout')->assertOk();
+
+        // Le même jeton est désormais refusé.
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->getJson('/api/profile')->assertStatus(401);
+    }
+
+    public function test_logout_requires_a_token(): void
+    {
+        $this->postJson('/api/auth/logout')->assertStatus(401);
+    }
 }

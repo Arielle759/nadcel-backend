@@ -34,6 +34,14 @@ Route::post('/auth/login', function (Request $request) {
     ]);
 })->middleware('throttle:5,1');
 
+// Déconnexion : le jeton courant est invalidé côté serveur (liste noire JWT),
+// il ne peut plus servir même s'il a été copié avant la déconnexion.
+Route::post('/auth/logout', function () {
+    auth('api')->logout();
+
+    return response()->json(['message' => 'Déconnexion réussie.']);
+})->middleware('auth:api');
+
 // Mot de passe oublié : lien par e-mail, valable 60 minutes, usage unique.
 Route::post('/auth/forgot-password', [Api\PasswordResetController::class, 'forgot'])->middleware('throttle:5,1');
 Route::post('/auth/reset-password', [Api\PasswordResetController::class, 'reset'])->middleware('throttle:10,1');
