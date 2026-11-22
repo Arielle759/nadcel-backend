@@ -11,20 +11,32 @@ use App\Http\Controllers\Controller;
 
 class ServiceController extends Controller
 {
-    // GET /api/services - Lister tous les services (filtre optionnel ?salon_id=)
+    // GET /api/services - Lister les services actifs (filtre optionnel ?salon_id=).
+    // Le gérant du salon peut demander aussi ses services désactivés
+    // (?include_inactive=1) pour les réactiver depuis son espace.
     public function index(Request $request)
     {
         $validated = $request->validate([
-            'per_page' => 'sometimes|integer|min:1|max:100',
+            'per_page'         => 'sometimes|integer|min:1|max:100',
+            'salon_id'         => 'required_if_accepted:include_inactive',
+            'include_inactive' => 'sometimes|boolean',
         ]);
+
+        $includeInactive = $request->boolean('include_inactive');
+        if ($includeInactive) {
+            $this->authorize('manageServices', Salon::findOrFail($validated['salon_id']));
+        }
 
         // employees_count : une prestation que personne ne réalise n'a aucun
         // créneau. L'espace gérant le signale, la réservation l'explique.
-        $services = Service::where('is_active', true)
+        $services = Service::query()
+            ->when(!$includeInactive, fn ($q) => $q->where('is_active', true))
             ->when($request->query('salon_id'), fn ($q, $salonId) => $q->where('salon_id', $salonId))
             ->whereIn('salon_id', Salon::visibleTo(Auth::user())->select('id'))
             ->with('salon')
             ->withCount(['employees' => fn ($e) => $e->where('employees.is_active', true)])
+            ->orderByDesc('is_active')
+            ->orderBy('name')
             ->paginate($validated['per_page'] ?? 10);
 
         return response()->json($services);
@@ -91,12 +103,34 @@ class ServiceController extends Controller
         return response()->json($service);
     }
 
-    // DELETE /api/services/{id} - Supprimer un service
-    public function destroy(Service $service)
+    // Un service n'est jamais supprimé : le désactiver le retire de la page
+    // du salon et des nouvelles réservations, sans toucher à son historique
+    // (rendez-vous passés, avis, chiffre d'affaires, statistiques).
+    public function deactivate(Service $service)
     {
         $this->authorize('manageServices', $service->salon);
 
-        $service->delete();
-        return response()->noContent();
+        $service->forceFill(['is_active' => false])->save();
+
+        $upcoming = $service->appointments()
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('scheduled_at', '>', now())
+            ->count();
+
+        return response()->json([
+            'service' => $service,
+            // Rendez-vous à venir déjà pris pour ce service : ils sont
+            // maintenus, le gérant décide de les honorer ou de prévenir.
+            'upcoming_appointments' => $upcoming,
+        ]);
+    }
+
+    public function activate(Service $service)
+    {
+        $this->authorize('manageServices', $service->salon);
+
+        $service->forceFill(['is_active' => true])->save();
+
+        return response()->json(['service' => $service]);
     }
 }

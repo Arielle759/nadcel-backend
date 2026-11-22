@@ -103,7 +103,9 @@ Route::middleware(['auth:api', 'active'])->group(function () {
     Route::apiResource('salons', Api\SalonController::class)->except(['index', 'show', 'store', 'destroy']);
     Route::patch('salons/{salon}/deactivate', [Api\SalonController::class, 'deactivate']);
     Route::patch('salons/{salon}/activate', [Api\SalonController::class, 'activate']);
-    Route::apiResource('services', Api\ServiceController::class)->except(['index', 'show']);
+    Route::apiResource('services', Api\ServiceController::class)->except(['index', 'show', 'destroy']);
+    Route::patch('services/{service}/deactivate', [Api\ServiceController::class, 'deactivate']);
+    Route::patch('services/{service}/activate', [Api\ServiceController::class, 'activate']);
     Route::apiResource('employees', Api\EmployeeController::class)->except(['destroy']);
     Route::patch('employees/{employee}/deactivate', [Api\EmployeeController::class, 'deactivate']);
     Route::patch('employees/{employee}/activate', [Api\EmployeeController::class, 'activate']);

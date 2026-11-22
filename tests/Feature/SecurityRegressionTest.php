@@ -134,7 +134,7 @@ class SecurityRegressionTest extends TestCase
         $this->getJson("/api/services/{$inactive->id}")->assertNotFound();
     }
 
-    public function test_service_deletion_preserves_appointments_reviews_and_history(): void
+    public function test_service_deactivation_preserves_appointments_reviews_and_history(): void
     {
         [$salon, $service] = $this->staffedSalon();
         $appointment = Appointment::factory()->completed()->create(['salon_id' => $salon->id, 'service_id' => $service->id]);
@@ -142,8 +142,8 @@ class SecurityRegressionTest extends TestCase
             'client_id' => $appointment->client_id, 'salon_id' => $salon->id,
             'appointment_id' => $appointment->id, 'rating' => 5,
         ]);
-        $this->actingAs($salon->manager, 'api')->deleteJson("/api/services/{$service->id}")->assertNoContent();
-        $this->assertSoftDeleted('services', ['id' => $service->id]);
+        $this->actingAs($salon->manager, 'api')->patchJson("/api/services/{$service->id}/deactivate")->assertOk();
+        $this->assertDatabaseHas('services', ['id' => $service->id, 'is_active' => false, 'deleted_at' => null]);
         $this->assertDatabaseHas('appointments', ['id' => $appointment->id, 'status' => 'completed']);
         $this->assertDatabaseHas('reviews', ['id' => $review->id]);
         $this->getJson("/api/appointments/{$appointment->id}")->assertOk()->assertJsonPath('service.id', $service->id);

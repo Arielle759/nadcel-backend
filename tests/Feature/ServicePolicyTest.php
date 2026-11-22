@@ -118,19 +118,19 @@ class ServicePolicyTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_manager_can_delete_own_service(): void
+    public function test_manager_can_deactivate_own_service(): void
     {
         $manager = User::factory()->create();
         $salon   = Salon::factory()->for($manager, 'manager')->create();
         $service = Service::factory()->for($salon)->create();
 
         $response = $this->actingAs($manager, 'api')
-                         ->deleteJson("/api/services/{$service->id}");
+                         ->patchJson("/api/services/{$service->id}/deactivate");
 
-        $response->assertStatus(204);
+        $response->assertOk()->assertJsonPath('service.is_active', false);
     }
 
-    public function test_stranger_cannot_delete_service(): void
+    public function test_stranger_cannot_deactivate_service(): void
     {
         $manager  = User::factory()->create();
         $stranger = User::factory()->create();
@@ -138,12 +138,12 @@ class ServicePolicyTest extends TestCase
         $service  = Service::factory()->for($salon)->create();
 
         $response = $this->actingAs($stranger, 'api')
-                         ->deleteJson("/api/services/{$service->id}");
+                         ->patchJson("/api/services/{$service->id}/deactivate");
 
         $response->assertStatus(403);
     }
 
-    public function test_admin_cannot_delete_service(): void
+    public function test_admin_cannot_deactivate_service(): void
     {
         $manager = User::factory()->create();
         $admin   = User::factory()->create();
@@ -152,7 +152,7 @@ class ServicePolicyTest extends TestCase
         $service = Service::factory()->for($salon)->create();
 
         $response = $this->actingAs($admin, 'api')
-                         ->deleteJson("/api/services/{$service->id}");
+                         ->patchJson("/api/services/{$service->id}/deactivate");
 
         $response->assertStatus(403);
     }
