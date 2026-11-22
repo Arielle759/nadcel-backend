@@ -117,13 +117,7 @@ class SalonController extends Controller
                 'id'         => $salon->id,
                 'name'       => $salon->name,
                 'city'       => $salon->city,
-                'status'     => match (true) {
-                    $salon->is_verified && $salon->is_active && $salon->deactivated_at !== null => 'deactivated',
-                    $salon->is_verified && $salon->is_active => 'verified',
-                    $salon->is_verified                      => 'suspended',
-                    $salon->is_active                        => 'pending',
-                    default                                  => 'rejected',
-                },
+                'status'     => $salon->status(),
                 'created_at' => $salon->created_at,
             ]);
 

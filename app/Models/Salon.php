@@ -133,6 +133,22 @@ class Salon extends Model
     }
 
     // Visible du public : validé par l'admin, non suspendu, non désactivé par le gérant.
+    /**
+     * État du salon, calculé à partir de is_verified, is_active et deactivated_at :
+     * pending (en attente), verified (en ligne), rejected (refusé),
+     * suspended (suspendu par l'administrateur), deactivated (désactivé par le gérant).
+     */
+    public function status(): string
+    {
+        return match (true) {
+            $this->is_verified && $this->is_active && $this->deactivated_at !== null => 'deactivated',
+            $this->is_verified && $this->is_active => 'verified',
+            $this->is_verified                     => 'suspended',
+            $this->is_active                       => 'pending',
+            default                                => 'rejected',
+        };
+    }
+
     public function isPublic(): bool
     {
         return $this->is_active && $this->is_verified && $this->deactivated_at === null;
