@@ -296,6 +296,10 @@ class AppointmentController extends Controller
                 // Calcul automatique : annulation par la cliente moins de 24 h avant.
                 $changes['cancelled_late'] = $locked->isLateCancellation();
             }
+            if ($nouveauStatut === 'in_progress') {
+                // Heure réelle d'arrivée de la cliente, signalée par le salon.
+                $changes['arrived_at'] = now();
+            }
             $locked->update($changes);
             return $locked;
         }, attempts: 3);

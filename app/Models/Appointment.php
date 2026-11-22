@@ -90,6 +90,7 @@ class Appointment extends Model
         'reminder_sent_at',
         'cancelled_late',
         'no_show_detected_at',
+        'arrived_at',
     ];
 
     /** Moyens de paiement utilisés sur place. */
@@ -144,6 +145,7 @@ class Appointment extends Model
         'reminder_sent_at' => 'datetime',
         'cancelled_late' => 'boolean',
         'no_show_detected_at' => 'datetime',
+        'arrived_at' => 'datetime',
     ];
 
     /** Montant réellement encaissé ; à défaut (anciens rendez-vous), le prix prévu. */

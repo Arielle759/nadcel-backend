@@ -75,6 +75,8 @@ class NoShowDetectionTest extends TestCase
             ->patchJson("/api/appointments/{$now->id}", ['status' => 'in_progress'])
             ->assertOk();
         $this->assertSame('in_progress', $now->fresh()->status);
+        $this->assertNotNull($now->fresh()->arrived_at, "l'heure d'arrivée est enregistrée");
+        $this->assertNull($tooEarly->fresh()->arrived_at);
 
         $this->actingAs($this->client, 'api')
             ->patchJson("/api/appointments/{$tooEarly->id}", ['status' => 'in_progress'])
